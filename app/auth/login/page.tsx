@@ -3,7 +3,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import LoginFormSwitcher from '@/components/form/LoginFormSwitcher'
 
-const page = () => {
+export default function LoginPage() {
     return (
         <section className='flex h-screen w-full'>
             <div className='hidden lg:block lg:w-1/2 h-full relative'>
@@ -39,5 +39,3 @@ const page = () => {
         </section>
     )
 }
-
-export default page

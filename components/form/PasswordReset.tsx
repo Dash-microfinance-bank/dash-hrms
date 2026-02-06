@@ -1,7 +1,10 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
+import { setInvitedUserPassword } from '@/lib/actions/users'
+import { toast } from 'sonner'
 
 const passwordSchema = z
   .object({
@@ -28,10 +31,12 @@ const passwordSchema = z
 type PasswordFormValues = z.infer<typeof passwordSchema>
 
 const PasswordReset = () => {
+  const router = useRouter()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof PasswordFormValues, string>>>({})
   const newPasswordRef = useRef<HTMLInputElement>(null)
 
@@ -39,8 +44,10 @@ const PasswordReset = () => {
     newPasswordRef.current?.focus()
   }, [])
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+
+    // Validate
     const result = passwordSchema.safeParse({ newPassword, confirmPassword })
     if (!result.success) {
       const fieldErrors: Partial<Record<keyof PasswordFormValues, string>> = {}
@@ -52,17 +59,33 @@ const PasswordReset = () => {
       return
     }
     setErrors({})
-    // TODO: call password reset API (e.g. Supabase auth updateUser)
+
+    // Submit to server
+    setIsSubmitting(true)
+    try {
+      const response = await setInvitedUserPassword(newPassword)
+      if (response.success) {
+        toast.success('Password created successfully! Redirecting...')
+        // Redirect to dashboard after a brief delay
+        setTimeout(() => {
+          router.push('/dashboard')
+          router.refresh()
+        }, 1000)
+      } else {
+        toast.error(response.error)
+        setIsSubmitting(false)
+      }
+    } catch (error) {
+      toast.error('An unexpected error occurred. Please try again.')
+      setIsSubmitting(false)
+    }
   }
 
   return (
     <form className="w-full max-w-md" onSubmit={handleSubmit}>
       <div className="px-3">
         <div className="flex flex-col gap-1 mb-5">
-          <label
-            htmlFor="new-password"
-            className="ml-1 font-medium text-sm"
-          >
+          <label htmlFor="new-password" className="ml-1 font-medium text-sm">
             New Password
           </label>
           <div className="relative">
@@ -74,10 +97,12 @@ const PasswordReset = () => {
               placeholder="Enter your new password"
               value={newPassword}
               onChange={(e) => {
-              setNewPassword(e.target.value)
-                if (errors.newPassword) setErrors((prev) => ({ ...prev, newPassword: undefined }))
+                setNewPassword(e.target.value)
+                if (errors.newPassword)
+                  setErrors((prev) => ({ ...prev, newPassword: undefined }))
               }}
-              className="border-2 border-gray-300 rounded-md py-3 px-3 pr-12 w-full focus:outline-none focus:border-primary aria-invalid:border-red-500 placeholder:text-sm"
+              disabled={isSubmitting}
+              className="border-2 border-gray-300 rounded-md py-3 px-3 pr-12 w-full focus:outline-none focus:border-primary aria-invalid:border-red-500 placeholder:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               aria-invalid={!!errors.newPassword}
               aria-describedby={errors.newPassword ? 'new-password-error' : undefined}
               autoComplete="new-password"
@@ -85,7 +110,8 @@ const PasswordReset = () => {
             <button
               type="button"
               onClick={() => setShowNewPassword((prev) => !prev)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 py-1 px-2 text-sm text-gray-600 hover:text-gray-900 focus:outline-none rounded"
+              disabled={isSubmitting}
+              className="absolute right-2 top-1/2 -translate-y-1/2 py-1 px-2 text-sm text-gray-600 hover:text-gray-900 focus:outline-none rounded disabled:opacity-50"
               aria-label={showNewPassword ? 'Hide password' : 'Show password'}
               tabIndex={0}
             >
@@ -99,10 +125,7 @@ const PasswordReset = () => {
           )}
         </div>
         <div className="flex flex-col gap-1 mb-8">
-          <label
-            htmlFor="confirm-password"
-            className="ml-1 font-medium text-sm"
-          >
+          <label htmlFor="confirm-password" className="ml-1 font-medium text-sm">
             Confirm Password
           </label>
           <div className="relative">
@@ -113,9 +136,11 @@ const PasswordReset = () => {
               value={confirmPassword}
               onChange={(e) => {
                 setConfirmPassword(e.target.value)
-                if (errors.confirmPassword) setErrors((prev) => ({ ...prev, confirmPassword: undefined }))
+                if (errors.confirmPassword)
+                  setErrors((prev) => ({ ...prev, confirmPassword: undefined }))
               }}
-              className="border-2 border-gray-300 rounded-md py-3 px-3 pr-12 w-full focus:outline-none focus:border-primary aria-invalid:border-red-500 placeholder:text-sm"
+              disabled={isSubmitting}
+              className="border-2 border-gray-300 rounded-md py-3 px-3 pr-12 w-full focus:outline-none focus:border-primary aria-invalid:border-red-500 placeholder:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               aria-invalid={!!errors.confirmPassword}
               aria-describedby={errors.confirmPassword ? 'confirm-password-error' : undefined}
               autoComplete="new-password"
@@ -124,7 +149,8 @@ const PasswordReset = () => {
             <button
               type="button"
               onClick={() => setShowConfirmPassword((prev) => !prev)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 py-1 px-2 text-sm text-gray-600 hover:text-gray-900 focus:outline-none rounded"
+              disabled={isSubmitting}
+              className="absolute right-2 top-1/2 -translate-y-1/2 py-1 px-2 text-sm text-gray-600 hover:text-gray-900 focus:outline-none rounded disabled:opacity-50"
               aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
               tabIndex={0}
             >
@@ -139,8 +165,11 @@ const PasswordReset = () => {
         </div>
         <button
           type="submit"
-          className="bg-primary text-white py-4 px-3 rounded-md hover:bg-primary/80 transition-all duration-300 w-full"
-        >Submit Password</button>
+          disabled={isSubmitting}
+          className="bg-primary text-white py-4 px-3 rounded-md hover:bg-primary/80 transition-all duration-300 w-full disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSubmitting ? 'Setting Password...' : 'Create Password & Continue'}
+        </button>
       </div>
     </form>
   )
