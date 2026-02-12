@@ -25,43 +25,16 @@ const createGradeSchema = z.object({
     .trim()
     .optional()
     .or(z.literal('')),
-  level: z
-    .string()
-    .optional()
-    .transform((val) => (val && val.trim() !== '' ? Number(val) : null))
-    .refine((val) => val === null || Number.isInteger(val), {
-      message: 'Level must be a whole number',
-    }),
-  min_salary: z
-    .string()
-    .optional()
-    .transform((val) => (val && val.trim() !== '' ? Number(val.replace(/,/g, '')) : null))
-    .refine((val) => val === null || !Number.isNaN(val), {
-      message: 'Enter a valid minimum salary',
-    }),
-  max_salary: z
-    .string()
-    .optional()
-    .transform((val) => (val && val.trim() !== '' ? Number(val.replace(/,/g, '')) : null))
-    .refine((val) => val === null || !Number.isNaN(val), {
-      message: 'Enter a valid maximum salary',
-    }),
+  level: z.string().optional(),
+  min_salary: z.string().optional(),
+  max_salary: z.string().optional(),
   currency: z
     .string()
     .max(10, 'Currency code is too long')
     .trim()
     .optional()
     .or(z.literal('')),
-}).refine(
-  (values) =>
-    values.min_salary === null ||
-    values.max_salary === null ||
-    values.min_salary <= values.max_salary,
-  {
-    message: 'Minimum salary cannot be greater than maximum salary',
-    path: ['min_salary'],
-  }
-)
+})
 
 type CreateGradeFormValues = z.infer<typeof createGradeSchema>
 
@@ -88,17 +61,63 @@ function CreateGradeFormBody({
       min_salary: '',
       max_salary: '',
       currency: 'NGN',
-    } as any,
+    },
   })
 
   const onSubmit = async (values: CreateGradeFormValues) => {
+    // Parse numeric fields from strings
+    const levelStr = values.level?.trim() ?? ''
+    const level =
+      levelStr.length > 0 ? Number(levelStr) : null
+
+    if (levelStr.length > 0 && (!Number.isFinite(level) || !Number.isInteger(level))) {
+      toast.error('Level must be a whole number')
+      return
+    }
+
+    const parseMoney = (input: string | undefined) => {
+      const raw = input?.trim()
+      if (!raw) return null
+      const num = Number(raw.replace(/,/g, ''))
+      return Number.isFinite(num) ? num : NaN
+    }
+
+    const minSalary = parseMoney(values.min_salary)
+    const maxSalary = parseMoney(values.max_salary)
+
+    if (values.min_salary && Number.isNaN(minSalary)) {
+      toast.error('Enter a valid minimum salary')
+      return
+    }
+
+    if (values.max_salary && Number.isNaN(maxSalary)) {
+      toast.error('Enter a valid maximum salary')
+      return
+    }
+
+    if (
+      minSalary !== null &&
+      !Number.isNaN(minSalary) &&
+      maxSalary !== null &&
+      !Number.isNaN(maxSalary) &&
+      minSalary > maxSalary
+    ) {
+      toast.error('Minimum salary cannot be greater than maximum salary')
+      return
+    }
+
     const result = await createGrade({
       name: values.name,
       code: values.code || null,
-      level: values.level,
-      min_salary: values.min_salary,
-      max_salary: values.max_salary,
-      currency: values.currency && values.currency.trim() !== '' ? values.currency : 'NGN',
+      level,
+      min_salary:
+        minSalary !== null && !Number.isNaN(minSalary) ? minSalary : null,
+      max_salary:
+        maxSalary !== null && !Number.isNaN(maxSalary) ? maxSalary : null,
+      currency:
+        values.currency && values.currency.trim() !== ''
+          ? values.currency.trim()
+          : 'NGN',
     })
 
     if (result.success) {
@@ -166,7 +185,7 @@ function CreateGradeFormBody({
             <Input
               id="grade-level"
               placeholder="e.g. 1"
-              {...register('level' as any)}
+              {...register('level')}
               className={
                 errors.level
                   ? 'border-destructive outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary'
@@ -187,7 +206,7 @@ function CreateGradeFormBody({
             <Input
               id="grade-min-salary"
               placeholder="e.g. 250000"
-              {...register('min_salary' as any)}
+              {...register('min_salary')}
               className={
                 errors.min_salary
                   ? 'border-destructive outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary'
@@ -206,7 +225,7 @@ function CreateGradeFormBody({
             <Input
               id="grade-max-salary"
               placeholder="e.g. 500000"
-              {...register('max_salary' as any)}
+              {...register('max_salary')}
               className={
                 errors.max_salary
                   ? 'border-destructive outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary'
