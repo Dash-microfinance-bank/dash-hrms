@@ -10,7 +10,7 @@ export default function GradesPage() {
         Manage employee grades, levels, and compensation structures.
       </p>
       <div className="mt-6">
-      <Suspense fallback={<GradesTableSkeleton />}>
+        <Suspense fallback={<GradesTableSkeleton />}>
           <GradesTableWithData />
         </Suspense>
       </div>

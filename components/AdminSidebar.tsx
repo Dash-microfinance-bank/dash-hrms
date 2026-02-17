@@ -25,11 +25,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { Building2, Briefcase, TrendingUp, Users, LogOut, Settings, FileText } from 'lucide-react'
+import { Building2, Briefcase, TrendingUp, Users, LogOut, Settings, FileText, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
+  { label: 'Office Locations', href: '/dashboard/admin/locations', icon: MapPin },
   { label: 'Departments', href: '/dashboard/admin/departments', icon: Building2 },
   { label: 'Job roles', href: '/dashboard/admin/job-roles', icon: Briefcase },
   { label: 'Grades', href: '/dashboard/admin/grades', icon: TrendingUp }
@@ -133,7 +134,7 @@ export function AdminSidebar() {
               <AlertDialogAction
                 onClick={handleLogout}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
+                >
                 Log out
               </AlertDialogAction>
             </AlertDialogFooter>
