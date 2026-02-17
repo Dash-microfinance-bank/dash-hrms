@@ -88,6 +88,16 @@ export function DepartmentsTable({ data }: DepartmentsTableProps) {
         },
       },
       {
+        id: 'parent_department',
+        header: 'Parent department',
+        accessorFn: (row) => row.parent_department_name ?? '',
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.parent_department_name ?? '—'}
+          </span>
+        ),
+      },
+      {
         id: 'created_at',
         header: ({ column }) => (
           <Button
@@ -214,7 +224,7 @@ export function DepartmentsTable({ data }: DepartmentsTableProps) {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="h-32 text-center align-middle">
+                <TableCell colSpan={5} className="h-32 text-center align-middle">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <p className="text-sm text-muted-foreground">
                       No departments found for this organization.
@@ -270,11 +280,13 @@ export function DepartmentsTable({ data }: DepartmentsTableProps) {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSuccess={handleSuccess}
+        departments={data}
       />
 
       {editingDepartment && (
         <EditDepartmentModal
           department={editingDepartment}
+          departments={data}
           open={!!editingDepartment}
           onOpenChange={(open) => {
             if (!open) {

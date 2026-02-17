@@ -9,7 +9,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 
 const ROW_COUNT = 8
-const COLUMNS = ['S/N', 'Name', 'Created', 'Actions'] as const
+const COLUMNS = ['S/N', 'Name', 'Parent department', 'Created', 'Actions'] as const
 
 export function DepartmentsTableSkeleton() {
   return (
@@ -30,6 +30,9 @@ export function DepartmentsTableSkeleton() {
               </TableCell>
               <TableCell>
                 <Skeleton className="h-4 w-40" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-32" />
               </TableCell>
               <TableCell>
                 <Skeleton className="h-4 w-28" />

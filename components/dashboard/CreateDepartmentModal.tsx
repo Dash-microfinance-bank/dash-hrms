@@ -31,6 +31,7 @@ const createDepartmentSchema = z.object({
     .trim()
     .optional()
     .or(z.literal('')),
+  parent_department_id: z.string().optional().or(z.literal('')),
 })
 
 type CreateDepartmentFormValues = z.infer<typeof createDepartmentSchema>
@@ -39,12 +40,14 @@ type CreateDepartmentModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: () => void
+  departments: Array<{ id: string; name: string; code: string | null }>
 }
 
 function CreateDepartmentFormBody({
+  departments,
   onOpenChange,
   onSuccess,
-}: Pick<CreateDepartmentModalProps, 'onOpenChange' | 'onSuccess'>) {
+}: Pick<CreateDepartmentModalProps, 'departments' | 'onOpenChange' | 'onSuccess'>) {
   const {
     register,
     handleSubmit,
@@ -55,6 +58,7 @@ function CreateDepartmentFormBody({
       name: '',
       code: '',
       description: '',
+      parent_department_id: '',
     },
   })
 
@@ -63,6 +67,7 @@ function CreateDepartmentFormBody({
       name: values.name,
       code: values.code || null,
       description: values.description || null,
+      parent_department_id: values.parent_department_id || null,
     })
 
     if (result.success) {
@@ -100,6 +105,24 @@ function CreateDepartmentFormBody({
           {errors.name && (
             <p className="text-xs text-destructive ml-2">{errors.name.message}</p>
           )}
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="dept-parent" className="text-sm font-medium ml-2">
+            Parent department (optional)
+          </label>
+          <select
+            id="dept-parent"
+            {...register('parent_department_id')}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary md:text-sm"
+          >
+            <option value="">None</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.code && d.code.trim() ? `${d.name} (${d.code.trim()})` : d.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="space-y-2">
@@ -160,6 +183,7 @@ export function CreateDepartmentModal({
   open,
   onOpenChange,
   onSuccess,
+  departments,
 }: CreateDepartmentModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -167,6 +191,7 @@ export function CreateDepartmentModal({
         {open ? (
           <CreateDepartmentFormBody
             key="create-department-form"
+            departments={departments}
             onOpenChange={onOpenChange}
             onSuccess={onSuccess}
           />

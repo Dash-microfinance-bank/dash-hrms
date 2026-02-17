@@ -53,6 +53,7 @@ type DepartmentInput = {
   name: string
   code?: string | null
   description?: string | null
+  parent_department_id?: string | null
 }
 
 const DEPARTMENTS_PATH = '/dashboard/admin/departments'
@@ -68,9 +69,24 @@ export async function createDepartment(input: DepartmentInput): Promise<Departme
   const name = input.name.trim()
   const code = input.code?.trim() || null
   const description = input.description?.trim() || null
+  const parentDepartmentId = input.parent_department_id?.trim() || null
 
   if (!name) {
     return { success: false, error: 'Name is required' }
+  }
+
+  if (parentDepartmentId) {
+    const { data: parent, error: parentError } = await supabase
+      .from('departments')
+      .select('id, organization_id')
+      .eq('id', parentDepartmentId)
+      .single()
+    if (parentError || !parent) {
+      return { success: false, error: 'Parent department not found' }
+    }
+    if (parent.organization_id !== orgId) {
+      return { success: false, error: 'Parent department must belong to your organization' }
+    }
   }
 
   const { error } = await supabase
@@ -80,6 +96,7 @@ export async function createDepartment(input: DepartmentInput): Promise<Departme
       name,
       code,
       description,
+      parent_department_id: parentDepartmentId,
     })
 
   if (error) {
@@ -125,20 +142,67 @@ export async function updateDepartment(
   const name = input.name.trim()
   const code = input.code?.trim() || null
   const description = input.description?.trim() || null
+  const parentDepartmentId = input.parent_department_id !== undefined ? (input.parent_department_id?.trim() || null) : undefined
 
   if (!name) {
     return { success: false, error: 'Name is required' }
   }
 
+  if (parentDepartmentId !== undefined) {
+    if (parentDepartmentId === id) {
+      return { success: false, error: 'A department cannot be its own parent' }
+    }
+    if (parentDepartmentId) {
+      const { data: allDepts } = await supabase
+        .from('departments')
+        .select('id, parent_department_id')
+        .eq('organization_id', orgId)
+      const depts = (allDepts ?? []) as Array<{ id: string; parent_department_id: string | null }>
+      const descendantIds = new Set<string>()
+      const collectDescendants = (parentId: string) => {
+        for (const d of depts) {
+          if (d.parent_department_id === parentId && d.id !== parentId) {
+            descendantIds.add(d.id)
+            collectDescendants(d.id)
+          }
+        }
+      }
+      collectDescendants(id)
+      if (descendantIds.has(parentDepartmentId)) {
+        return {
+          success: false,
+          error:
+            'You cannot select a department that is already a child or grandchild of this department',
+        }
+      }
+      const { data: parent, error: parentError } = await supabase
+        .from('departments')
+        .select('id, organization_id')
+        .eq('id', parentDepartmentId)
+        .single()
+      if (parentError || !parent) {
+        return { success: false, error: 'Parent department not found' }
+      }
+      if (parent.organization_id !== orgId) {
+        return { success: false, error: 'Parent department must belong to your organization' }
+      }
+    }
+  }
+
+  const updatePayload: Record<string, unknown> = {
+    name,
+    code,
+    description,
+    is_active: input.is_active ?? true,
+    updated_at: new Date().toISOString(),
+  }
+  if (parentDepartmentId !== undefined) {
+    updatePayload.parent_department_id = parentDepartmentId
+  }
+
   const { error } = await supabase
     .from('departments')
-    .update({
-      name,
-      code,
-      description,
-      is_active: input.is_active ?? true,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', id)
     .eq('organization_id', orgId)
 

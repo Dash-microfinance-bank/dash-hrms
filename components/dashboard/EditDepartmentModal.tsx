@@ -32,13 +32,33 @@ const editDepartmentSchema = z.object({
     .trim()
     .optional()
     .or(z.literal('')),
+  parent_department_id: z.string().optional().or(z.literal('')),
   is_active: z.boolean().optional(),
 })
+
+/** Returns the set of all descendant department ids (children, grandchildren, etc.) of the given id. */
+function getDescendantIds(
+  departmentId: string,
+  departments: Array<{ id: string; parent_department_id: string | null }>
+): Set<string> {
+  const set = new Set<string>()
+  const collect = (parentId: string) => {
+    for (const d of departments) {
+      if (d.parent_department_id === parentId && d.id !== parentId) {
+        set.add(d.id)
+        collect(d.id)
+      }
+    }
+  }
+  collect(departmentId)
+  return set
+}
 
 type EditDepartmentFormValues = z.infer<typeof editDepartmentSchema>
 
 type EditDepartmentModalProps = {
   department: DepartmentRow
+  departments: DepartmentRow[]
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: () => void
@@ -46,9 +66,15 @@ type EditDepartmentModalProps = {
 
 function EditDepartmentFormBody({
   department,
+  departments,
   onOpenChange,
   onSuccess,
 }: Omit<EditDepartmentModalProps, 'open'>) {
+  const descendantIds = getDescendantIds(department.id, departments)
+  const selectableParents = departments.filter(
+    (d) => d.id !== department.id && !descendantIds.has(d.id)
+  )
+
   const {
     register,
     handleSubmit,
@@ -59,6 +85,7 @@ function EditDepartmentFormBody({
       name: department.name,
       code: department.code ?? '',
       description: department.description ?? '',
+      parent_department_id: department.parent_department_id ?? '',
       is_active: department.is_active,
     },
   })
@@ -68,6 +95,7 @@ function EditDepartmentFormBody({
       name: values.name,
       code: values.code || null,
       description: values.description || null,
+      parent_department_id: values.parent_department_id || null,
       is_active: values.is_active ?? true,
     })
 
@@ -106,6 +134,24 @@ function EditDepartmentFormBody({
           {errors.name && (
             <p className="text-xs text-destructive ml-2">{errors.name.message}</p>
           )}
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="edit-dept-parent" className="text-sm font-medium ml-2">
+            Parent department (optional)
+          </label>
+          <select
+            id="edit-dept-parent"
+            {...register('parent_department_id')}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary md:text-sm"
+          >
+            <option value="">None</option>
+            {selectableParents.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.code && d.code.trim() ? `${d.name} (${d.code.trim()})` : d.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="space-y-2">
@@ -164,6 +210,7 @@ function EditDepartmentFormBody({
 
 export function EditDepartmentModal({
   department,
+  departments,
   open,
   onOpenChange,
   onSuccess,
@@ -175,6 +222,7 @@ export function EditDepartmentModal({
           <EditDepartmentFormBody
             key={department.id}
             department={department}
+            departments={departments}
             onOpenChange={onOpenChange}
             onSuccess={onSuccess}
           />

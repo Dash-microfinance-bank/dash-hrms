@@ -8,6 +8,8 @@ export type DepartmentRow = {
   name: string
   code: string | null
   description: string | null
+  parent_department_id: string | null
+  parent_department_name: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -39,7 +41,7 @@ export async function getDepartmentsForCurrentOrg(): Promise<DepartmentRow[]> {
   const { data, error } = await supabase
     .from('departments')
     .select(
-      'id, organization_id, name, code, description, is_active, created_at, updated_at'
+      'id, organization_id, name, code, description, parent_department_id, is_active, created_at, updated_at'
     )
     .eq('organization_id', orgId)
     .order('created_at', { ascending: false })
@@ -49,6 +51,23 @@ export async function getDepartmentsForCurrentOrg(): Promise<DepartmentRow[]> {
     return []
   }
 
-  return data as DepartmentRow[]
+  const rows = data as Array<{
+    id: string
+    organization_id: string
+    name: string
+    code: string | null
+    description: string | null
+    parent_department_id: string | null
+    is_active: boolean
+    created_at: string
+    updated_at: string
+  }>
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  return rows.map((r) => ({
+    ...r,
+    parent_department_name: r.parent_department_id
+      ? byId.get(r.parent_department_id)?.name ?? null
+      : null,
+  })) as DepartmentRow[]
 }
 
