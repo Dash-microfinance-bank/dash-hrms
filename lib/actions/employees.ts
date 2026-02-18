@@ -23,6 +23,7 @@ type CreateEmployeeInput = {
   department_id: string
   job_role_id: string
   manager_id?: string | null
+  report_location?: string | null
 }
 
 const EMPLOYEES_PATH = '/dashboard/admin/employees'
@@ -238,6 +239,21 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
     }
   }
 
+  // Validate report_location if provided (must be same org location)
+  if (input.report_location) {
+    const { data: location, error: locationError } = await supabase
+      .from('organization_location')
+      .select('id, organization_id')
+      .eq('id', input.report_location)
+      .single()
+    if (locationError || !location) {
+      return { success: false, error: 'Selected office location was not found' }
+    }
+    if (location.organization_id !== orgId) {
+      return { success: false, error: 'Office location must belong to your organization' }
+    }
+  }
+
   // Create employee record
   const { data: employee, error: employeeError } = await supabase
     .from('employees')
@@ -253,6 +269,7 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<Employ
       department_id: input.department_id,
       job_role_id: input.job_role_id,
       manager_id: input.manager_id || null,
+      report_location: input.report_location || null,
     })
     .select('id')
     .single()

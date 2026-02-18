@@ -40,6 +40,7 @@ import { CircularProgress } from '@/components/ui/circular-progress'
 import type { EmployeeRow, ManagerStats } from '@/lib/data/employees'
 import type { DepartmentRow } from '@/lib/data/departments'
 import type { JobRoleRow } from '@/lib/data/job-roles'
+import type { LocationRow } from '@/lib/data/locations'
 import {
   CreateEmployeeModal,
   type LineManagerOption,
@@ -50,6 +51,7 @@ type EmployeesTableProps = {
   departments: DepartmentRow[]
   jobRoles: JobRoleRow[]
   managerStats: ManagerStats
+  locations: LocationRow[]
 }
 
 function formatEmployeeName(employee: EmployeeRow): string {
@@ -90,6 +92,7 @@ export function EmployeesTable({
   departments,
   jobRoles,
   managerStats,
+  locations,
 }: EmployeesTableProps) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
@@ -455,6 +458,7 @@ export function EmployeesTable({
         jobRoles={jobRoles}
         lineManagerOptions={lineManagerOptions}
         managerStats={managerStats}
+        locations={locations}
       />
     </div>
   )

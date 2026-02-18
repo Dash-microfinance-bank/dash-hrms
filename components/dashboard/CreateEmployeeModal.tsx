@@ -21,6 +21,7 @@ import { createEmployee } from '@/lib/actions/employees'
 import type { DepartmentRow } from '@/lib/data/departments'
 import type { JobRoleRow } from '@/lib/data/job-roles'
 import type { ManagerStats } from '@/lib/data/employees'
+import type { LocationRow } from '@/lib/data/locations'
 import { toast } from 'sonner'
 import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
@@ -78,6 +79,7 @@ const createEmployeeSchema = z
     department_id: z.string().min(1, 'Department is required'),
     job_role_id: z.string().min(1, 'Job role is required'),
     manager_id: z.string().optional(),
+    report_location: z.string().optional().or(z.literal('')),
   })
   .refine(
     (data) => {
@@ -93,6 +95,21 @@ const createEmployeeSchema = z
       path: ['end_date'],
     }
   )
+  .refine(
+    (data) => {
+      // If end_date is provided, it must be after start_date
+      if (data.end_date && data.end_date.trim() !== '' && data.start_date) {
+        const start = new Date(data.start_date)
+        const end = new Date(data.end_date)
+        return start < end
+      }
+      return true
+    },
+    {
+      message: 'End date must be after start date',
+      path: ['end_date'],
+    }
+  )
 
 type CreateEmployeeFormValues = z.infer<typeof createEmployeeSchema>
 
@@ -104,6 +121,7 @@ type CreateEmployeeModalProps = {
   jobRoles: JobRoleRow[]
   lineManagerOptions: LineManagerOption[]
   managerStats: ManagerStats
+  locations: LocationRow[]
 }
 
 function CreateEmployeeFormBody({
@@ -113,7 +131,8 @@ function CreateEmployeeFormBody({
   jobRoles,
   lineManagerOptions,
   managerStats,
-}: Pick<CreateEmployeeModalProps, 'onOpenChange' | 'onSuccess' | 'departments' | 'jobRoles' | 'lineManagerOptions' | 'managerStats'>) {
+  locations,
+}: Pick<CreateEmployeeModalProps, 'onOpenChange' | 'onSuccess' | 'departments' | 'jobRoles' | 'lineManagerOptions' | 'managerStats' | 'locations'>) {
   const [managerSearch, setManagerSearch] = useState('')
   const [managerOpen, setManagerOpen] = useState(false)
 
@@ -138,6 +157,7 @@ function CreateEmployeeFormBody({
       department_id: '',
       job_role_id: '',
       manager_id: '',
+      report_location: '',
     },
   })
 
@@ -206,6 +226,7 @@ function CreateEmployeeFormBody({
       department_id: values.department_id,
       job_role_id: values.job_role_id,
       manager_id: values.manager_id || null,
+      report_location: values.report_location || null,
     })
 
     if (result.success) {
@@ -580,6 +601,41 @@ function CreateEmployeeFormBody({
           </Popover>
         </div>
 
+        <div className="space-y-2">
+          <label htmlFor="employee-report-location" className="ml-2 text-sm font-medium">
+            Office location (optional)
+          </label>
+          <select
+            id="employee-report-location"
+            {...register('report_location')}
+            className={cn(
+              'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm',
+              errors.report_location
+                ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
+                : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
+            )}
+          >
+            <option value="">None</option>
+            {locations.map((loc) => {
+              const parts: string[] = []
+              if (loc.state) parts.push(loc.state)
+              if (loc.address) {
+                const addr = loc.address.length > 40 ? `${loc.address.slice(0, 40)}...` : loc.address
+                parts.push(addr)
+              }
+              const display = parts.length > 0 ? parts.join(' - ') : `Location ${loc.id.slice(0, 8)}`
+              return (
+                <option key={loc.id} value={loc.id}>
+                  {display}
+                </option>
+              )
+            })}
+          </select>
+          {errors.report_location && (
+            <p className="ml-2 text-xs text-destructive">{errors.report_location.message}</p>
+          )}
+        </div>
+
         <div className="flex items-center gap-2">
           <input
             type="checkbox"
@@ -621,6 +677,7 @@ export function CreateEmployeeModal({
   jobRoles,
   lineManagerOptions,
   managerStats,
+  locations,
 }: CreateEmployeeModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -634,6 +691,7 @@ export function CreateEmployeeModal({
             jobRoles={jobRoles}
             lineManagerOptions={lineManagerOptions}
             managerStats={managerStats}
+            locations={locations}
           />
         ) : null}
       </DialogContent>
