@@ -53,12 +53,14 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
+     * Run middleware only on page/layout routes, never on:
+     * - api/*           (API routes run auth in Node.js runtime — Edge sandbox
+     *                    cannot reliably reach Supabase's auth HTTP endpoint)
+     * - _next/static    (static assets)
+     * - _next/image     (image optimisation)
+     * - favicon.ico
+     * - common static file extensions
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
