@@ -45,6 +45,7 @@ import {
   CreateEmployeeModal,
   type LineManagerOption,
 } from '@/components/dashboard/CreateEmployeeModal'
+import { Employee360Modal } from '@/components/dashboard/Employee360Modal'
 
 type EmployeesTableProps = {
   employees: EmployeeRow[]
@@ -96,9 +97,16 @@ export function EmployeesTable({
 }: EmployeesTableProps) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const lineManagerOptions = useMemo(() => toLineManagerOptions(employees), [employees])
+
+  const openProfile = (id: string) => {
+    setSelectedEmployeeId(id)
+    setProfileOpen(true)
+  }
 
   const columns = useMemo<ColumnDef<EmployeeRow>[]>(
     () => [
@@ -148,7 +156,11 @@ export function EmployeesTable({
           })()
 
           return (
-            <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="flex items-center gap-2 cursor-pointer text-left"
+              onClick={() => openProfile(employee.id)}
+            >
               <Avatar size="sm" className="size-8 shrink-0">
                 {employee.avatar_url ? (
                   <AvatarImage src={employee.avatar_url} alt={name} />
@@ -156,7 +168,7 @@ export function EmployeesTable({
                 <AvatarFallback className="text-xs">{initials}</AvatarFallback>
               </Avatar>
               <span className="font-medium">{name}</span>
-            </div>
+            </button>
           )
         },
       },
@@ -324,9 +336,11 @@ export function EmployeesTable({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled>Edit</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openProfile(_row.original.id)}>
+                View Details
+              </DropdownMenuItem>
               <DropdownMenuItem disabled className="text-destructive focus:text-destructive">
-                Delete
+                Remove Employee
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -458,6 +472,19 @@ export function EmployeesTable({
         jobRoles={jobRoles}
         lineManagerOptions={lineManagerOptions}
         managerStats={managerStats}
+        locations={locations}
+      />
+
+      <Employee360Modal
+        employeeId={selectedEmployeeId}
+        open={profileOpen}
+        onOpenChange={(o) => {
+          setProfileOpen(o)
+          if (!o) setSelectedEmployeeId(null)
+        }}
+        departments={departments}
+        jobRoles={jobRoles}
+        lineManagerOptions={lineManagerOptions}
         locations={locations}
       />
     </div>
