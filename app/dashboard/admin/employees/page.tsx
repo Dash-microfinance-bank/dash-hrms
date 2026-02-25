@@ -5,7 +5,7 @@ import { EmployeesTableWithData } from '../../../../components/dashboard/Employe
 export default function EmployeesPage() {
   return (
     <section className="p-4">
-      <h1 className="mb-2 text-2xl font-semibold">Employees</h1>
+      <h1 className="mb-2 text-2xl font-semibold">All Employees</h1>
       <p className="text-muted-foreground">
         View and manage employee records, profiles, and information.
       </p>

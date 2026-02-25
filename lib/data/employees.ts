@@ -17,6 +17,8 @@ export type EmployeeRow = {
   department_id: string
   job_role_id: string
   manager_id: string | null
+  // Optional office / work location (organization_location.id)
+  report_location: string | null
   department_name: string | null
   department_code: string | null
   job_role_title: string | null
@@ -24,6 +26,12 @@ export type EmployeeRow = {
   biodata_title: string | null
   biodata_firstname: string | null
   biodata_lastname: string | null
+  biodata_gender: string | null
+  biodata_marital_status: string | null
+  biodata_religion: string | null
+  biodata_ethnic_group: string | null
+  biodata_state: string | null
+  biodata_country: string | null
   avatar_url: string | null
   profile_completion_pct: number
 }
@@ -61,7 +69,9 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
   ] = await Promise.all([
     supabase
       .from('employees')
-      .select('id, organization_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id')
+      .select(
+        'id, organization_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id, report_location'
+      )
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false }),
     supabase
@@ -74,7 +84,9 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
       .eq('organization_id', orgId),
     supabase
       .from('employee_biodata')
-      .select('employee_id, title, firstname, lastname')
+      .select(
+        'employee_id, title, firstname, lastname, gender, marital_status, religion, ethnic_group, state, country'
+      )
       .eq('organization_id', orgId),
     supabase.rpc('get_employee_avatars', { p_org_id: orgId }),
     supabase.rpc('get_employee_profile_completion', { p_org_id: orgId }),
@@ -108,7 +120,18 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
   const employees = employeesData ?? []
   const departments = (departmentsData ?? []) as Array<{ id: string; name: string; code: string | null }>
   const jobRoles = (jobRolesData ?? []) as Array<{ id: string; title: string; code: string | null }>
-  const biodataRecords = (biodataData ?? []) as Array<{ employee_id: string; title: string | null; firstname: string | null; lastname: string | null }>
+  const biodataRecords = (biodataData ?? []) as Array<{
+    employee_id: string
+    title: string | null
+    firstname: string | null
+    lastname: string | null
+    gender: string | null
+    marital_status: string | null
+    religion: string | null
+    ethnic_group: string | null
+    state: string | null
+    country: string | null
+  }>
   const avatarRecords = (avatarData ?? []) as Array<{ employee_id: string; avatar_url: string | null }>
   const completionRecords = (completionData ?? []) as Array<{
     employee_id: string
@@ -141,16 +164,35 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
     jobRoleById.set(jr.id, { title: jr.title, code: jr.code })
   }
 
-  const biodataByEmployeeId = new Map<string, { title: string | null; firstname: string | null; lastname: string | null }>()
+  const biodataByEmployeeId = new Map<
+    string,
+    {
+      title: string | null
+      firstname: string | null
+      lastname: string | null
+      gender: string | null
+      marital_status: string | null
+      religion: string | null
+      ethnic_group: string | null
+      state: string | null
+      country: string | null
+    }
+  >()
   for (const bio of biodataRecords) {
     biodataByEmployeeId.set(bio.employee_id, {
       title: bio.title,
       firstname: bio.firstname,
       lastname: bio.lastname,
+      gender: bio.gender,
+      marital_status: bio.marital_status,
+      religion: bio.religion,
+      ethnic_group: bio.ethnic_group,
+      state: bio.state,
+      country: bio.country,
     })
   }
 
-  return employees.map((emp: any) => {
+  return employees.map((emp) => {
     const dept = departmentById.get(emp.department_id)
     const jr = jobRoleById.get(emp.job_role_id)
     const bio = biodataByEmployeeId.get(emp.id)
@@ -172,6 +214,7 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
       department_id: emp.department_id as string,
       job_role_id: emp.job_role_id as string,
       manager_id: (emp.manager_id ?? null) as string | null,
+      report_location: (emp.report_location ?? null) as string | null,
       department_name: dept?.name ?? null,
       department_code: dept?.code ?? null,
       job_role_title: jr?.title ?? null,
@@ -179,6 +222,12 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
       biodata_title: bio?.title ?? null,
       biodata_firstname: bio?.firstname ?? null,
       biodata_lastname: bio?.lastname ?? null,
+      biodata_gender: bio?.gender ?? null,
+      biodata_marital_status: bio?.marital_status ?? null,
+      biodata_religion: bio?.religion ?? null,
+      biodata_ethnic_group: bio?.ethnic_group ?? null,
+      biodata_state: bio?.state ?? null,
+      biodata_country: bio?.country ?? null,
       avatar_url: avatarUrl,
       profile_completion_pct: profileCompletionPct,
     }
