@@ -1,8 +1,10 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { randomBytes } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { Resend } from 'resend'
 
 /**
  * Server actions for user management
@@ -349,9 +351,193 @@ export type CreateUserResult =
   | { success: true }
   | { success: false; error: string }
 
+// ── Internal helpers ────────────────────────────────────────────────────────
+
 /**
- * Creates a new user (invite in auth), profile row, and user_roles; sends invite via Supabase.
- * Only super_admin. Fails if user already exists in auth or profiles.
+ * Generates a cryptographically strong random password.
+ * Format: 16 random bytes → base64url (22 chars) with a fixed prefix so the
+ * password always contains mixed characters that satisfy common policies.
+ */
+function generateRandomPassword(): string {
+  const bytes = randomBytes(16).toString('base64url') // 22 url-safe chars
+  return `Dash@${bytes}`                              // ≥ 27 chars, uppercase, symbol
+}
+
+/**
+ * Inserts a profiles row and user_roles rows for a newly-created auth user.
+ * On partial failure, cleans up what was already written before returning
+ * an error so the caller can delete the auth user and abort.
+ */
+async function createProfileAndRoles(
+  authUserId: string,
+  orgId: string,
+  fullName: string | null,
+  roles: string[]
+): Promise<{ success: true } | { success: false; error: string }> {
+  const supabase = await createClient()
+
+  const { error: profileError } = await supabase.from('profiles').insert({
+    id: authUserId,
+    organization_id: orgId,
+    full_name: fullName,
+    avatar_url: null,
+  })
+
+  if (profileError) {
+    return { success: false, error: profileError.message }
+  }
+
+  if (roles.length > 0) {
+    const { error: rolesError } = await supabase
+      .from('user_roles')
+      .insert(roles.map((role) => ({ user_id: authUserId, role, organization_id: orgId })))
+
+    if (rolesError) {
+      await supabase.from('profiles').delete().eq('id', authUserId)
+      return { success: false, error: rolesError.message }
+    }
+  }
+
+  return { success: true }
+}
+
+/**
+ * Looks up an employee by organization_id and email. If found, returns the
+ * employee id and whether that employee has any direct reports (manager_id
+ * pointing to them). Does not modify data.
+ */
+async function getEmployeeLinkInfo(
+  orgId: string,
+  email: string
+): Promise<{ employeeId: string | null; hasDirectReports: boolean }> {
+  const supabase = await createClient()
+
+  const { data: empRow, error: lookupError } = await supabase
+    .from('employees')
+    .select('id, auth_id')
+    .eq('organization_id', orgId)
+    .ilike('email', email)
+    .maybeSingle()
+
+  if (lookupError || !empRow) {
+    if (lookupError) {
+      console.warn('[Create User] Employee lookup error (non-fatal):', lookupError.message)
+    }
+    return { employeeId: null, hasDirectReports: false }
+  }
+
+  // manager_id references auth.users.id; count employees who report to this one (by auth_id)
+  let hasDirectReports = false
+  if (empRow.auth_id) {
+    const { count, error: countError } = await supabase
+      .from('employees')
+      .select('*', { count: 'exact', head: true })
+      .eq('manager_id', empRow.auth_id)
+    hasDirectReports = !countError && typeof count === 'number' && count > 0
+  }
+  return { employeeId: empRow.id, hasDirectReports }
+}
+
+/**
+ * Sets employees.auth_id for the given employee row to the new auth user id.
+ */
+async function linkEmployeeAuthId(employeeId: string, authUserId: string): Promise<void> {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('employees')
+    .update({ auth_id: authUserId })
+    .eq('id', employeeId)
+
+  if (error) {
+    console.warn('[Create User] Employee link error (non-fatal):', error.message)
+    return
+  }
+  console.log('[Create User] ✅ Linked auth user to employee record:', employeeId)
+}
+
+/**
+ * Sends login details (email + generated password) to the new user via Resend.
+ * Errors are logged but do not abort the overall creation flow.
+ */
+async function sendLoginDetailsEmail(
+  toEmail: string,
+  fullName: string | null,
+  password: string,
+  loginUrl: string
+): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    console.warn('[Create User] RESEND_API_KEY not set – skipping login details email')
+    return
+  }
+
+  const resend = new Resend(apiKey)
+
+  const displayName = fullName ?? toEmail
+
+  const { error } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL ?? 'Dash HRM <hr@dash-hrm.com>',
+    to: toEmail,
+    subject: 'Your Dash HRM login details',
+    html: `
+      <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto;">
+        <h2>Welcome to Dash HRM, ${displayName}!</h2>
+        <p>Your account has been created. Here are your login details:</p>
+        <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+          <tr>
+            <td style="padding: 8px; font-weight: bold; border: 1px solid #e2e8f0;">Email</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">${toEmail}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; font-weight: bold; border: 1px solid #e2e8f0;">Password</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">${password}</td>
+          </tr>
+        </table>
+        <p>
+          <a href="${loginUrl}" style="display: inline-block; background: #6c2cbe; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">
+            Sign in to Dash HRM
+          </a>
+        </p>
+        <p style="color: #64748b; font-size: 13px;">
+          We recommend changing your password after your first sign-in.
+        </p>
+      </div>
+    `,
+  })
+
+  if (error) {
+    console.warn('[Create User] Resend email failed (non-fatal):', error)
+  } else {
+    console.log('[Create User] ✅ Login details email sent to', toEmail)
+  }
+}
+
+// ── Roles helpers ────────────────────────────────────────────────────────────
+
+const PRIVILEGED_ROLES = new Set(['super_admin', 'hr', 'finance'])
+
+function hasPrivilegedRole(roles: string[]): boolean {
+  return roles.some((r) => PRIVILEGED_ROLES.has(r))
+}
+
+// ── Main action ──────────────────────────────────────────────────────────────
+
+/**
+ * Creates a new system user and either sends a Supabase invite email (for
+ * privileged roles: super_admin / hr / finance) or creates the auth account
+ * directly with a generated password and emails the credentials via Resend
+ * (for standard roles: employee / manager).
+ *
+ * After adding the user to the profiles table:
+ *  - If a matching employees row exists (same organization_id + email), the
+ *    row's auth_id is set to the new auth user id (whether or not employee
+ *    role was selected).
+ *  - If such an employee exists, the "employee" role is added to the user
+ *    if not already selected.
+ *  - If any employee has that employee as their manager (manager_id), the
+ *    "manager" role is added to the user if not already selected.
+ *
+ * Only super_admin can call this action.
  */
 export async function createUserAndInvite(
   firstName: string,
@@ -359,14 +545,20 @@ export async function createUserAndInvite(
   email: string,
   roles: string[]
 ): Promise<CreateUserResult> {
+  if (roles.length === 0) {
+    return { success: false, error: 'At least one role must be selected' }
+  }
+
   const supabase = await createClient()
   const {
     data: { user: currentUser },
   } = await supabase.auth.getUser()
+
   if (!currentUser) {
     return { success: false, error: 'Not authenticated' }
   }
 
+  // Resolve creator's organization — new user will be placed in the same org
   const { data: myProfile } = await supabase
     .from('profiles')
     .select('organization_id')
@@ -377,6 +569,9 @@ export async function createUserAndInvite(
     return { success: false, error: 'Organization not found' }
   }
 
+  const orgId = myProfile.organization_id as string
+
+  // Only super_admin may create users
   const { data: myRoles } = await supabase
     .from('user_roles')
     .select('role')
@@ -391,6 +586,7 @@ export async function createUserAndInvite(
   const first = firstName.trim()
   const last = lastName.trim()
   const fullName = [first, last].filter(Boolean).join(' ') || null
+  const isPrivileged = hasPrivilegedRole(roles)
 
   let admin
   try {
@@ -403,70 +599,111 @@ export async function createUserAndInvite(
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-  const redirectTo = `${baseUrl}/auth/callback`
 
-  const { data: inviteData, error: inviteError } =
-    await admin.auth.admin.inviteUserByEmail(trimmedEmail, {
-      redirectTo,
-      data: {
-        full_name: fullName ?? undefined,
-        name: fullName ?? undefined,
-      },
+  // ── Branch 1: Privileged roles → Supabase invite email ──────────────────
+  if (isPrivileged) {
+    const redirectTo = `${baseUrl}/auth/callback`
+
+    const { data: inviteData, error: inviteError } =
+      await admin.auth.admin.inviteUserByEmail(trimmedEmail, {
+        redirectTo,
+        data: { full_name: fullName ?? undefined, name: fullName ?? undefined },
+      })
+
+    if (inviteError) {
+      const msg = inviteError.message.toLowerCase()
+      if (msg.includes('already')) {
+        return { success: false, error: 'A user with this email already exists.' }
+      }
+      return { success: false, error: inviteError.message }
+    }
+
+    const invitedUser = inviteData?.user
+    if (!invitedUser?.id) {
+      return { success: false, error: 'Invite succeeded but user id was not returned' }
+    }
+
+    const linkInfo = await getEmployeeLinkInfo(orgId, trimmedEmail)
+    const finalRoles = [...roles]
+    if (linkInfo.employeeId) {
+      if (!finalRoles.includes('employee')) finalRoles.push('employee')
+      if (linkInfo.hasDirectReports && !finalRoles.includes('manager')) finalRoles.push('manager')
+    }
+
+    const dbResult = await createProfileAndRoles(invitedUser.id, orgId, fullName, finalRoles)
+    if (!dbResult.success) {
+      await admin.auth.admin.deleteUser(invitedUser.id)
+      return { success: false, error: dbResult.error }
+    }
+
+    if (linkInfo.employeeId) {
+      await linkEmployeeAuthId(linkInfo.employeeId, invitedUser.id)
+    }
+
+    console.log('[Create User] ✅ Privileged user invited:', {
+      userId: invitedUser.id,
+      email: trimmedEmail,
+      orgId,
+      roles: finalRoles,
+      employeeLinked: !!linkInfo.employeeId,
+      managerAdded: linkInfo.hasDirectReports,
     })
 
-  if (inviteError) {
-    const msg = inviteError.message.toLowerCase()
-    if (
-      msg.includes('already') ||
-      msg.includes('already registered') ||
-      msg.includes('already exists')
-    ) {
-      return { success: false, error: 'A user with this email already exists.' }
-    }
-    return { success: false, error: inviteError.message }
+    revalidatePath('/dashboard/system')
+    return { success: true }
   }
 
-  const invitedUser = inviteData?.user
-  if (!invitedUser?.id) {
-    return { success: false, error: 'Invite succeeded but user id was not returned' }
-  }
+  // ── Branch 2: Standard roles → create with password, send via Resend ────
+  const generatedPassword = generateRandomPassword()
 
-  // Insert profile
-  const { error: profileError } = await supabase.from('profiles').insert({
-    id: invitedUser.id,
-    organization_id: myProfile.organization_id,
-    full_name: fullName,
-    avatar_url: null,
+  const { data: createData, error: createError } = await admin.auth.admin.createUser({
+    email: trimmedEmail,
+    password: generatedPassword,
+    email_confirm: true,
+    user_metadata: { full_name: fullName ?? undefined, name: fullName ?? undefined },
   })
 
-  if (profileError) {
-    // Cleanup: delete auth user if profile insert failed
-    await admin.auth.admin.deleteUser(invitedUser.id)
-    return { success: false, error: profileError.message }
-  }
-
-  // Insert roles
-  if (roles.length > 0) {
-    const { error: rolesError } = await supabase
-      .from('user_roles')
-      .insert(roles.map((role) => ({ 
-        user_id: invitedUser.id, 
-        role,
-        organization_id: myProfile.organization_id 
-      })))
-
-    if (rolesError) {
-      // Cleanup
-      await supabase.from('profiles').delete().eq('id', invitedUser.id)
-      await admin.auth.admin.deleteUser(invitedUser.id)
-      return { success: false, error: rolesError.message }
+  if (createError) {
+    const msg = createError.message.toLowerCase()
+    if (msg.includes('already')) {
+      return { success: false, error: 'A user with this email already exists.' }
     }
+    return { success: false, error: createError.message }
   }
 
-  console.log('[Create User] ✅ User created successfully:', {
-    userId: invitedUser.id,
+  const createdUser = createData?.user
+  if (!createdUser?.id) {
+    return { success: false, error: 'User creation succeeded but user id was not returned' }
+  }
+
+  const linkInfo = await getEmployeeLinkInfo(orgId, trimmedEmail)
+  const finalRoles = [...roles]
+  if (linkInfo.employeeId) {
+    if (!finalRoles.includes('employee')) finalRoles.push('employee')
+    if (linkInfo.hasDirectReports && !finalRoles.includes('manager')) finalRoles.push('manager')
+  }
+
+  const dbResult = await createProfileAndRoles(createdUser.id, orgId, fullName, finalRoles)
+  if (!dbResult.success) {
+    await admin.auth.admin.deleteUser(createdUser.id)
+    return { success: false, error: dbResult.error }
+  }
+
+  if (linkInfo.employeeId) {
+    await linkEmployeeAuthId(linkInfo.employeeId, createdUser.id)
+  }
+
+  // Send login credentials email via Resend (non-fatal if it fails)
+  const loginUrl = `${baseUrl}/auth/login`
+  await sendLoginDetailsEmail(trimmedEmail, fullName, generatedPassword, loginUrl)
+
+  console.log('[Create User] ✅ Standard user created with login details sent:', {
+    userId: createdUser.id,
     email: trimmedEmail,
-    organizationId: myProfile.organization_id
+    orgId,
+    roles: finalRoles,
+    employeeLinked: !!linkInfo.employeeId,
+    managerAdded: linkInfo.hasDirectReports,
   })
 
   revalidatePath('/dashboard/system')

@@ -72,9 +72,6 @@ const employeeSchema = z
     manager_id: z.string().optional(),
     report_location: z.string().optional().or(z.literal('')),
     create_user_account: z.boolean(),
-    user_first_name: z.string().optional(),
-    user_last_name: z.string().optional(),
-    user_email: z.string().optional(),
   })
   .refine(
     (data) => {
@@ -104,7 +101,7 @@ const employeeSchema = z
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((data.email ?? '').trim())
       )
     },
-    { message: 'Employee name and email above are used for the invite.', path: ['email'] }
+    { message: 'First name, last name, and a valid email are required to send login details.', path: ['email'] }
   )
 
 type FormValues = z.infer<typeof employeeSchema>
@@ -150,9 +147,6 @@ export function SingleEmployeeUploadForm({
       manager_id: '',
       report_location: '',
       create_user_account: false,
-      user_first_name: '',
-      user_last_name: '',
-      user_email: '',
     },
   })
 
@@ -160,8 +154,6 @@ export function SingleEmployeeUploadForm({
   const contractType = useWatch({ control, name: 'contract_type', defaultValue: 'permanent' })
   const departmentId = useWatch({ control, name: 'department_id', defaultValue: '' })
   const managerId = useWatch({ control, name: 'manager_id', defaultValue: '' })
-  const createUserAccount = useWatch({ control, name: 'create_user_account', defaultValue: false })
-
   const handleDepartmentChange = (value: string) => {
     setValue('department_id', value)
     setValue('job_role_id', '')
@@ -171,7 +163,7 @@ export function SingleEmployeeUploadForm({
   const activeDepartments = departments.filter((d) => d.is_active)
 
   const availableManagers = useMemo(
-    () => lineManagerOptions.filter((m) => !managerStats.excludedIds.includes(m.id)),
+    () => lineManagerOptions.filter((m) => !managerStats.excludedIds.includes(m.employeeId)),
     [lineManagerOptions, managerStats.excludedIds]
   )
   const topManagers = useMemo(() => {
@@ -207,10 +199,6 @@ export function SingleEmployeeUploadForm({
       manager_id: values.manager_id || null,
       report_location: values.report_location || null,
       create_user_account: values.create_user_account,
-      user_first_name: values.create_user_account ? values.firstname : undefined,
-      user_last_name: values.create_user_account ? values.lastname : undefined,
-      user_email: values.create_user_account ? values.email : undefined,
-      roles: values.create_user_account ? ['employee'] : undefined,
     })
 
     if (!result.success) {
@@ -220,7 +208,7 @@ export function SingleEmployeeUploadForm({
 
     toast.success(
       values.create_user_account
-        ? 'Employee added and invite sent successfully.'
+        ? 'Employee added and login details sent.'
         : 'Employee added successfully.'
     )
     form.reset()
@@ -536,9 +524,9 @@ export function SingleEmployeeUploadForm({
       {/* Card 3: User account (optional) */}
       <Card>
         <CardHeader>
-          <CardTitle>User account</CardTitle>
+          <CardTitle>Login access</CardTitle>
           <CardDescription>
-            Optionally create a login account for this employee. They will receive an invite to set their password.
+            Optionally create a login account for this employee. Their credentials will be sent directly to their email.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -550,7 +538,7 @@ export function SingleEmployeeUploadForm({
               {...register('create_user_account')}
             />
             <Label htmlFor="create_user_account" className="cursor-pointer font-normal">
-              Send invite to employee
+              Send login details to employee
             </Label>
           </div>
           {/* {createUserAccount && (
@@ -571,5 +559,3 @@ export function SingleEmployeeUploadForm({
     </form>
   )
 }
-
-

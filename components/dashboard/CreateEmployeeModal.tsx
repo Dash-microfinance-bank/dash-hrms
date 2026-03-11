@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { createEmployee } from '@/lib/actions/employees'
+import { createSingleEmployee } from '@/lib/actions/employees'
 import type { DepartmentRow } from '@/lib/data/departments'
 import type { JobRoleRow } from '@/lib/data/job-roles'
 import type { ManagerStats } from '@/lib/data/employees'
@@ -30,7 +30,10 @@ import { ChevronDownIcon, SearchIcon, UserIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type LineManagerOption = {
+  /** Auth user id (auth.users.id) — value saved as employees.manager_id */
   id: string
+  /** Employee record id — used for exclusion (e.g. cannot select self/subordinates) */
+  employeeId: string
   name: string
   jobRoleDisplay: string
   avatarUrl?: string | null
@@ -80,6 +83,7 @@ const createEmployeeSchema = z
     job_role_id: z.string().min(1, 'Job role is required'),
     manager_id: z.string().optional(),
     report_location: z.string().optional().or(z.literal('')),
+    send_login_details: z.boolean(),
   })
   .refine(
     (data) => {
@@ -158,10 +162,16 @@ function CreateEmployeeFormBody({
       job_role_id: '',
       manager_id: '',
       report_location: '',
+      send_login_details: false,
     },
   })
 
   const { register, handleSubmit, setValue, control, formState: { errors, isSubmitting } } = form
+
+  // Ensure no line manager is preselected when opening the create form.
+  useEffect(() => {
+    setValue('manager_id', '')
+  }, [setValue])
   const contractType = useWatch({ control, name: 'contract_type', defaultValue: 'permanent' })
   const departmentId = useWatch({ control, name: 'department_id', defaultValue: '' })
   const managerId = useWatch({ control, name: 'manager_id', defaultValue: '' })
@@ -176,7 +186,7 @@ function CreateEmployeeFormBody({
 
   // Filter out excluded employees (self and subordinates)
   const availableManagers = useMemo(() => {
-    return lineManagerOptions.filter((m) => !managerStats.excludedIds.includes(m.id))
+    return lineManagerOptions.filter((m) => !managerStats.excludedIds.includes(m.employeeId))
   }, [lineManagerOptions, managerStats.excludedIds])
 
   // Get top 5 managers as suggestions
@@ -204,15 +214,17 @@ function CreateEmployeeFormBody({
       return topManagers
     }
     const q = managerSearch.trim().toLowerCase()
-    return availableManagers.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.jobRoleDisplay.toLowerCase().includes(q)
-    )
+    return availableManagers
+      .filter(
+        (m) =>
+          m.name.toLowerCase().includes(q) ||
+          m.jobRoleDisplay.toLowerCase().includes(q)
+      )
+      .slice(0, 5)
   }, [managerSearch, availableManagers, topManagers])
 
   const onSubmit = async (values: CreateEmployeeFormValues) => {
-    const result = await createEmployee({
+    const result = await createSingleEmployee({
       staff_id: values.staff_id,
       firstname: values.firstname,
       lastname: values.lastname,
@@ -227,10 +239,15 @@ function CreateEmployeeFormBody({
       job_role_id: values.job_role_id,
       manager_id: values.manager_id || null,
       report_location: values.report_location || null,
+      create_user_account: values.send_login_details,
     })
 
     if (result.success) {
-      toast.success('Employee created')
+      toast.success(
+        values.send_login_details
+          ? 'Employee created and login details sent.'
+          : 'Employee created.'
+      )
       onSuccess()
       onOpenChange(false)
     } else {
@@ -641,7 +658,7 @@ function CreateEmployeeFormBody({
             type="checkbox"
             id="employee-send-login"
             className="size-4 rounded border-input"
-            aria-label="Send login details"
+            {...register('send_login_details')}
           />
           <label
             htmlFor="employee-send-login"

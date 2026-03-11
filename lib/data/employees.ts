@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 export type EmployeeRow = {
   id: string
   organization_id: string
+  auth_id: string | null
   staff_id: string
   email: string
   phone: string | null
@@ -36,6 +37,25 @@ export type EmployeeRow = {
   profile_completion_pct: number
 }
 
+type RawEmployeeRow = {
+  id: string
+  organization_id: string
+  auth_id: string | null
+  staff_id: string
+  email: string
+  phone: string | null
+  contract_type: EmployeeRow['contract_type']
+  start_date: string | null
+  end_date: string | null
+  employment_status: EmployeeRow['employment_status']
+  active: boolean
+  created_at: string
+  department_id: string
+  job_role_id: string
+  manager_id: string | null
+  report_location: string | null
+}
+
 /**
  * Fetch all employees for the current user's organization.
  * Returns an empty array if unauthenticated or org is missing.
@@ -64,13 +84,12 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
     { data: departmentsData, error: departmentsError },
     { data: jobRolesData, error: jobRolesError },
     { data: biodataData, error: biodataError },
-    { data: avatarData, error: avatarError },
     { data: completionData, error: completionError },
   ] = await Promise.all([
     supabase
       .from('employees')
       .select(
-        'id, organization_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id, report_location'
+        'id, organization_id, auth_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id, report_location'
       )
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false }),
@@ -88,7 +107,6 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
         'employee_id, title, firstname, lastname, gender, marital_status, religion, ethnic_group, state, country'
       )
       .eq('organization_id', orgId),
-    supabase.rpc('get_employee_avatars', { p_org_id: orgId }),
     supabase.rpc('get_employee_profile_completion', { p_org_id: orgId }),
   ])
 
@@ -109,15 +127,11 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
     console.error('[Employees] Failed to fetch biodata:', biodataError)
   }
 
-  if (avatarError) {
-    console.error('[Employees] Failed to fetch employee avatars:', avatarError)
-  }
-
   if (completionError) {
     console.error('[Employees] Failed to fetch profile completion:', completionError)
   }
 
-  const employees = employeesData ?? []
+  const employees = (employeesData ?? []) as RawEmployeeRow[]
   const departments = (departmentsData ?? []) as Array<{ id: string; name: string; code: string | null }>
   const jobRoles = (jobRolesData ?? []) as Array<{ id: string; title: string; code: string | null }>
   const biodataRecords = (biodataData ?? []) as Array<{
@@ -132,17 +146,41 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
     state: string | null
     country: string | null
   }>
-  const avatarRecords = (avatarData ?? []) as Array<{ employee_id: string; avatar_url: string | null }>
   const completionRecords = (completionData ?? []) as Array<{
     employee_id: string
     filled_count: number
     total_count: number
   }>
 
-  // Create a map of employee_id -> avatar_url
+  // Create a map of employee_id -> avatar_url (sourced from profiles via auth_id)
   const avatarByEmployeeId = new Map<string, string | null>()
-  for (const av of avatarRecords) {
-    avatarByEmployeeId.set(av.employee_id, av.avatar_url)
+  const authIds = Array.from(
+    new Set(
+      employees
+        .map((emp) => emp.auth_id)
+        .filter((id): id is string => !!id)
+    )
+  )
+  if (authIds.length > 0) {
+    const { data: profilesData, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, avatar_url')
+      .in('id', authIds)
+
+    if (profilesError) {
+      console.error('[Employees] Failed to fetch profile avatars:', profilesError)
+    }
+
+    const avatarByProfileId = new Map<string, string | null>()
+    for (const p of (profilesData ?? []) as Array<{ id: string; avatar_url: string | null }>) {
+      avatarByProfileId.set(p.id, p.avatar_url ?? null)
+    }
+
+    for (const emp of employees) {
+      if (emp.auth_id) {
+        avatarByEmployeeId.set(emp.id, avatarByProfileId.get(emp.auth_id) ?? null)
+      }
+    }
   }
 
   const completionByEmployeeId = new Map<string, number>()
@@ -200,21 +238,22 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
     const profileCompletionPct = completionByEmployeeId.get(emp.id) ?? 0
 
     return {
-      id: emp.id as string,
-      organization_id: emp.organization_id as string,
-      staff_id: emp.staff_id as string,
-      email: emp.email as string,
-      phone: (emp.phone ?? null) as string | null,
-      contract_type: emp.contract_type as EmployeeRow['contract_type'],
-      start_date: (emp.start_date ?? null) as string | null,
-      end_date: (emp.end_date ?? null) as string | null,
-      employment_status: emp.employment_status as EmployeeRow['employment_status'],
-      active: emp.active as boolean,
-      created_at: emp.created_at as string,
-      department_id: emp.department_id as string,
-      job_role_id: emp.job_role_id as string,
-      manager_id: (emp.manager_id ?? null) as string | null,
-      report_location: (emp.report_location ?? null) as string | null,
+      id: emp.id,
+      organization_id: emp.organization_id,
+      auth_id: emp.auth_id,
+      staff_id: emp.staff_id,
+      email: emp.email,
+      phone: emp.phone,
+      contract_type: emp.contract_type,
+      start_date: emp.start_date,
+      end_date: emp.end_date,
+      employment_status: emp.employment_status,
+      active: emp.active,
+      created_at: emp.created_at,
+      department_id: emp.department_id,
+      job_role_id: emp.job_role_id,
+      manager_id: emp.manager_id,
+      report_location: emp.report_location,
       department_name: dept?.name ?? null,
       department_code: dept?.code ?? null,
       job_role_title: jr?.title ?? null,
@@ -269,10 +308,10 @@ export async function getManagerStatsForSelection(
 
   const orgId = myProfile.organization_id
 
-  // Fetch all employees with their manager_id
+  // Fetch all employees with manager_id (auth user id) and auth_id for subordinate resolution
   const { data: employeesData, error } = await supabase
     .from('employees')
-    .select('id, manager_id')
+    .select('id, manager_id, auth_id')
     .eq('organization_id', orgId)
     .eq('active', true)
 
@@ -281,7 +320,12 @@ export async function getManagerStatsForSelection(
     return { topManagers: [], excludedIds: [] }
   }
 
-  // Count direct reports for each manager
+  const employeeIdToAuthId = new Map<string, string>()
+  for (const emp of employeesData) {
+    if (emp.auth_id) employeeIdToAuthId.set(emp.id, emp.auth_id)
+  }
+
+  // Count direct reports per manager (manager_id is auth user id)
   const managerReportCounts = new Map<string, number>()
   for (const emp of employeesData) {
     if (emp.manager_id) {
@@ -290,30 +334,29 @@ export async function getManagerStatsForSelection(
     }
   }
 
-  // Get top 5 managers by direct report count
+  // Get top 5 managers by direct report count (id = auth user id)
   const topManagers = Array.from(managerReportCounts.entries())
     .map(([id, directReportsCount]) => ({ id, directReportsCount }))
     .sort((a, b) => b.directReportsCount - a.directReportsCount)
     .slice(0, 5)
 
-  // Build excluded IDs list
+  // Build excluded IDs list (employee ids to exclude from manager dropdown)
   const excludedIds: string[] = []
 
   if (employeeId) {
-    // Exclude self
     excludedIds.push(employeeId)
+    const myAuthId = employeeIdToAuthId.get(employeeId)
 
-    // Find all subordinates (direct and indirect)
     const subordinates = new Set<string>()
-    const findSubordinates = (managerId: string) => {
+    const findSubordinates = (managerAuthId: string) => {
       for (const emp of employeesData) {
-        if (emp.manager_id === managerId && emp.id !== managerId) {
-          subordinates.add(emp.id)
-          findSubordinates(emp.id) // Recursive to find indirect subordinates
-        }
+        if (emp.manager_id !== managerAuthId) continue
+        subordinates.add(emp.id)
+        const subAuthId = employeeIdToAuthId.get(emp.id)
+        if (subAuthId) findSubordinates(subAuthId)
       }
     }
-    findSubordinates(employeeId)
+    if (myAuthId) findSubordinates(myAuthId)
     excludedIds.push(...Array.from(subordinates))
   }
 

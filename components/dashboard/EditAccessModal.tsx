@@ -15,12 +15,13 @@ import type { ProfileRow } from '@/lib/data/users'
 import { toast } from 'sonner'
 
 const ROLE_OPTIONS = [
-  { value: 'employee', label: 'Employee' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'hr', label: 'HR' },
-  { value: 'finance', label: 'Finance' },
   { value: 'super_admin', label: 'Super Admin' },
+  { value: 'hr', label: 'HR' },
+  { value: 'finance', label: 'Finance' }
 ] as const
+
+const SYSTEM_ROLES = ['super_admin', 'hr', 'finance'] as const
+const PRESERVED_ROLES = ['employee', 'manager'] as const
 
 const MIN_ROLES = 1
 const MAX_ROLES = 4
@@ -39,7 +40,12 @@ function EditAccessFormBody({
   onOpenChange,
   onSuccess,
 }: Omit<EditAccessModalProps, 'open'>) {
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(user.roles)
+  const systemRolesFromUser = user.roles.filter((r) =>
+    SYSTEM_ROLES.includes(r as (typeof SYSTEM_ROLES)[number])
+  )
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(
+    systemRolesFromUser.length > 0 ? systemRolesFromUser : ['super_admin']
+  )
   const [saving, setSaving] = useState(false)
 
   const isEditingSelf = user.id === currentUserId
@@ -47,12 +53,51 @@ function EditAccessFormBody({
   const superAdminLocked = isEditingSelf && selfIsSuperAdmin
 
   const toggleRole = (role: string) => {
-    if (role === 'super_admin' && superAdminLocked) return
     setSelectedRoles((prev) => {
-      const next = prev.includes(role)
-        ? prev.filter((r) => r !== role)
-        : [...prev, role]
+      const hasHrOrFinance = prev.includes('hr') || prev.includes('finance')
+
+      // super_admin is mutually exclusive with hr/finance.
+      if (role === 'super_admin') {
+        // If we're editing ourselves and our super_admin is locked, do nothing.
+        if (superAdminLocked) return prev
+
+        // If hr/finance is selected, super_admin cannot be toggled on.
+        if (hasHrOrFinance) return prev
+
+        // Selecting super_admin clears other roles.
+        if (!prev.includes('super_admin')) return ['super_admin']
+
+        // Prevent deselecting super_admin when it is the only role selected.
+        return prev
+      }
+
+      // At this point, role is hr or finance.
+      const exists = prev.includes(role)
+
+      // Special case: editing self with locked super_admin.
+      if (superAdminLocked && prev.includes('super_admin')) {
+        if (exists) {
+          const next = prev.filter((r) => r !== role)
+          // Ensure at least super_admin remains.
+          return next.length === 0 ? ['super_admin'] : next
+        }
+        // Add hr/finance alongside locked super_admin, respecting MAX_ROLES.
+        if (prev.length >= MAX_ROLES) return prev
+        return [...prev, role]
+      }
+
+      if (exists) {
+        const next = prev.filter((r) => r !== role)
+        // If removing the last non-super role leaves none, fall back to super_admin.
+        if (next.length === 0) return ['super_admin']
+        return next
+      }
+
+      // Selecting hr/finance removes super_admin if present (for non-locked users).
+      const next = prev.filter((r) => r !== 'super_admin').concat(role)
+
       if (next.length > MAX_ROLES) return prev
+
       return next
     })
   }
@@ -65,7 +110,11 @@ function EditAccessFormBody({
   const handleSave = async () => {
     if (!canSave) return
     setSaving(true)
-    const result = await updateUserRoles(user.id, selectedRoles)
+    const preserved = user.roles.filter((r) =>
+      PRESERVED_ROLES.includes(r as (typeof PRESERVED_ROLES)[number])
+    )
+    const rolesToSave = [...preserved, ...selectedRoles]
+    const result = await updateUserRoles(user.id, rolesToSave)
     setSaving(false)
     if (result.success) {
       toast.success('Access updated successfully')
@@ -88,8 +137,10 @@ function EditAccessFormBody({
       <div className="grid gap-3 py-2">
         {ROLE_OPTIONS.map(({ value, label }) => {
           const checked = selectedRoles.includes(value)
+          const hasHrOrFinance =
+            selectedRoles.includes('hr') || selectedRoles.includes('finance')
           const disabled =
-            value === 'super_admin' && superAdminLocked
+            value === 'super_admin' && (superAdminLocked || hasHrOrFinance)
           return (
             <div
               key={value}

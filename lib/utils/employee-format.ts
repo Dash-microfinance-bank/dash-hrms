@@ -10,14 +10,17 @@ export function formatEmployeeName(emp: EmployeeRow): string {
 }
 
 export function toLineManagerOptions(employees: EmployeeRow[]): LineManagerOption[] {
-  return employees.map((emp) => {
+  return employees
+    .filter((emp) => emp.auth_id != null && emp.auth_id !== '')
+    .map((emp) => {
     const name = formatEmployeeName(emp)
     const jobRoleDisplay =
       emp.job_role_title && emp.job_role_code?.trim()
         ? `${emp.job_role_title} (${emp.job_role_code.trim()})`
         : emp.job_role_title ?? '—'
     return {
-      id: emp.id,
+      id: emp.auth_id ?? '',
+      employeeId: emp.id,
       name,
       jobRoleDisplay,
       avatarUrl: emp.avatar_url ?? null,

@@ -51,6 +51,7 @@ import type { DepartmentRow } from '@/lib/data/departments'
 import type { JobRoleRow } from '@/lib/data/job-roles'
 import type { LocationRow } from '@/lib/data/locations'
 import type { LineManagerOption } from '@/components/dashboard/CreateEmployeeModal'
+import type { ManagerStats } from '@/lib/data/employees'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ type Employee360ModalProps = {
   departments: DepartmentRow[]
   jobRoles: JobRoleRow[]
   lineManagerOptions: LineManagerOption[]
+  managerStats: ManagerStats
   locations: LocationRow[]
 }
 
@@ -939,6 +941,7 @@ function RoleCard({
   departments,
   jobRoles,
   lineManagerOptions,
+  managerStats,
   locations,
 }: {
   employeeId: string
@@ -948,6 +951,7 @@ function RoleCard({
   departments: DepartmentRow[]
   jobRoles: JobRoleRow[]
   lineManagerOptions: LineManagerOption[]
+  managerStats: ManagerStats
   locations: LocationRow[]
 }) {
   const [editing, setEditing] = useState(false)
@@ -984,17 +988,31 @@ function RoleCard({
   )
 
   const availableManagers = useMemo(
-    () => lineManagerOptions.filter((m) => m.id !== employeeId),
+    () => lineManagerOptions.filter((m) => m.employeeId !== employeeId),
     [lineManagerOptions, employeeId]
   )
 
+  const topManagers = useMemo(() => {
+    const topIds = new Set(managerStats.topManagers.map((m) => m.id))
+    return availableManagers
+      .filter((m) => topIds.has(m.id))
+      .slice(0, 5)
+      .sort((a, b) => {
+        const aIdx = managerStats.topManagers.findIndex((tm) => tm.id === a.id)
+        const bIdx = managerStats.topManagers.findIndex((tm) => tm.id === b.id)
+        return aIdx - bIdx
+      })
+  }, [availableManagers, managerStats.topManagers])
+
   const filteredManagers = useMemo(() => {
-    if (!managerSearch.trim()) return availableManagers.slice(0, 8)
+    if (!managerSearch.trim()) return topManagers
     const q = managerSearch.trim().toLowerCase()
-    return availableManagers.filter(
-      (m) => m.name.toLowerCase().includes(q) || m.jobRoleDisplay.toLowerCase().includes(q)
-    )
-  }, [managerSearch, availableManagers])
+    return availableManagers
+      .filter(
+        (m) => m.name.toLowerCase().includes(q) || m.jobRoleDisplay.toLowerCase().includes(q)
+      )
+      .slice(0, 5)
+  }, [managerSearch, availableManagers, topManagers])
 
   const selectedManager = useMemo(
     () => availableManagers.find((m) => m.id === form.manager_id) ?? null,
@@ -2511,6 +2529,7 @@ export function Employee360Modal({
   departments,
   jobRoles,
   lineManagerOptions,
+  managerStats,
   locations,
 }: Employee360ModalProps) {
   const [data, setData] = useState<Employee360Response | null>(null)
@@ -2570,6 +2589,9 @@ export function Employee360Modal({
           <div className="shrink-0 border-b px-5 pt-4 pb-0">
             <div className="flex items-center gap-3 pb-3">
               <Avatar className="size-11 shrink-0">
+                {data?.employee.avatar_url ? (
+                  <AvatarImage src={data.employee.avatar_url} alt={employeeName || 'Employee avatar'} />
+                ) : null}
                 <AvatarFallback className="text-sm font-semibold bg-muted">{initials}</AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
@@ -2634,6 +2656,7 @@ export function Employee360Modal({
                     departments={departments}
                     jobRoles={jobRoles}
                     lineManagerOptions={lineManagerOptions}
+                    managerStats={managerStats}
                     locations={locations}
                   />
                   <ContractCard employeeId={employeeId!} employee={data.employee} historyByField={historyByField} onSaveSuccess={onSaveSuccess} />

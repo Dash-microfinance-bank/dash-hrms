@@ -18,11 +18,9 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 
 const ROLE_OPTIONS = [
-  { value: 'employee', label: 'Employee' },
-  { value: 'manager', label: 'Manager' },
+  { value: 'super_admin', label: 'Super Admin' },
   { value: 'hr', label: 'HR' },
   { value: 'finance', label: 'Finance' },
-  { value: 'super_admin', label: 'Super Admin' },
 ] as const
 
 const MIN_ROLES = 1
@@ -46,7 +44,7 @@ function CreateUserFormBody({
   onOpenChange,
   onSuccess,
 }: Pick<CreateUserModalProps, 'onOpenChange' | 'onSuccess'>) {
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(['employee'])
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(['super_admin'])
 
   const {
     register,
@@ -63,10 +61,35 @@ function CreateUserFormBody({
 
   const toggleRole = (role: string) => {
     setSelectedRoles((prev) => {
-      const next = prev.includes(role)
-        ? prev.filter((r) => r !== role)
-        : [...prev, role]
+      const hasHrOrFinance = prev.includes('hr') || prev.includes('finance')
+
+      // super_admin is mutually exclusive with hr/finance.
+      if (role === 'super_admin') {
+        // If hr/finance is selected, the UI disables super_admin; keep state unchanged.
+        if (hasHrOrFinance) return prev
+
+        // Selecting super_admin clears other roles.
+        if (!prev.includes('super_admin')) return ['super_admin']
+
+        // Deselecting super_admin would leave zero roles; keep it selected.
+        return prev
+      }
+
+      // role is hr or finance:
+      const exists = prev.includes(role)
+
+      if (exists) {
+        const next = prev.filter((r) => r !== role)
+        // If removing the last non-super role, fall back to default super_admin.
+        if (next.length === 0) return ['super_admin']
+        return next
+      }
+
+      // Selecting hr/finance removes super_admin if present.
+      const next = prev.filter((r) => r !== 'super_admin').concat(role)
+
       if (next.length > MAX_ROLES) return prev
+
       return next
     })
   }
@@ -147,28 +170,37 @@ function CreateUserFormBody({
             )}
           </div>
           <div className="space-y-2">
-            <span className="text-sm font-medium">Roles</span>
-            <p className="text-xs text-muted-foreground">
+            <span className="text-sm font-medium mb-2">Roles</span>
+            {/* <p className="text-xs text-muted-foreground">
               At least {MIN_ROLES}, at most {MAX_ROLES} roles.
-            </p>
+            </p> */}
             <div className="grid gap-2 pt-1">
-              {ROLE_OPTIONS.map(({ value, label }) => (
-                <div key={value} className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id={`create-role-${value}`}
-                    checked={selectedRoles.includes(value)}
-                    onChange={() => toggleRole(value)}
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  <label
-                    htmlFor={`create-role-${value}`}
-                    className="cursor-pointer text-sm"
-                  >
-                    {label}
-                  </label>
-                </div>
-              ))}
+              {ROLE_OPTIONS.map(({ value, label }) => {
+                const hasHrOrFinance =
+                  selectedRoles.includes('hr') || selectedRoles.includes('finance')
+                const isDisabled = value === 'super_admin' && hasHrOrFinance
+
+                return (
+                  <div key={value} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id={`create-role-${value}`}
+                      checked={selectedRoles.includes(value)}
+                      onChange={() => toggleRole(value)}
+                      disabled={isDisabled}
+                      className="h-4 w-4 rounded border-input disabled:cursor-not-allowed"
+                    />
+                    <label
+                      htmlFor={`create-role-${value}`}
+                      className={`text-sm ${
+                        isDisabled ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer'
+                      }`}
+                    >
+                      {label}
+                    </label>
+                  </div>
+                )
+              })}
             </div>
             {selectedRoles.length < MIN_ROLES && (
               <p className="text-xs text-destructive">

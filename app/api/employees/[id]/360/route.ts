@@ -40,6 +40,7 @@ export interface Employee360Employee {
   job_role_code: string | null
   manager_name: string | null
   location_address: string | null
+  avatar_url: string | null
 }
 
 export interface Employee360Biodata {
@@ -141,6 +142,25 @@ export interface Employee360Training {
   document_url: string | null
 }
 
+type EmployeeRowFor360 = {
+  id: string
+  organization_id: string
+  staff_id: string
+  email: string
+  phone: string | null
+  contract_type: string
+  start_date: string | null
+  end_date: string | null
+  employment_status: string
+  active: boolean
+  created_at: string
+  department_id: string | null
+  job_role_id: string | null
+  manager_id: string | null
+  report_location: string | null
+  auth_id: string | null
+}
+
 export interface Employee360Response {
   employee: Employee360Employee
   biodata: Employee360Biodata
@@ -198,7 +218,7 @@ export async function GET(
       supabase
         .from('employees')
         .select(
-          'id, organization_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id, report_location'
+          'id, organization_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id, report_location, auth_id'
         )
         .eq('id', employeeId)
         .eq('organization_id', orgId)
@@ -281,24 +301,24 @@ export async function GET(
     if (empResult.error || !empResult.data)
       return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
 
-    const emp = empResult.data as Record<string, unknown>
+    const emp = empResult.data as EmployeeRowFor360
 
-    // ── Enrich: department, job role, location, manager ───────────────────────
-    const [deptResult, roleResult, locationResult, managerResult] = await Promise.all([
+    // ── Enrich: department, job role, location, avatar ────────────────────────
+    const [deptResult, roleResult, locationResult, avatarResult] = await Promise.all([
       emp.department_id
-        ? supabase.from('departments').select('name, code').eq('id', emp.department_id as string).single()
+        ? supabase.from('departments').select('name, code').eq('id', emp.department_id).single()
         : Promise.resolve({ data: null, error: null }),
       emp.job_role_id
-        ? supabase.from('job_roles').select('title, code').eq('id', emp.job_role_id as string).single()
+        ? supabase.from('job_roles').select('title, code').eq('id', emp.job_role_id).single()
         : Promise.resolve({ data: null, error: null }),
       emp.report_location
-        ? supabase.from('organization_location').select('address').eq('id', emp.report_location as string).single()
+        ? supabase.from('organization_location').select('address').eq('id', emp.report_location).single()
         : Promise.resolve({ data: null, error: null }),
-      emp.manager_id
+      emp.auth_id
         ? supabase
-            .from('employee_biodata')
-            .select('firstname, lastname')
-            .eq('employee_id', emp.manager_id as string)
+            .from('profiles')
+            .select('avatar_url')
+            .eq('id', emp.auth_id)
             .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
     ])
@@ -306,11 +326,36 @@ export async function GET(
     const dept = deptResult.data as { name: string; code: string | null } | null
     const role = roleResult.data as { title: string; code: string | null } | null
     const location = locationResult.data as { address: string | null } | null
-    const managerBio = managerResult.data as { firstname: string | null; lastname: string | null } | null
+    const avatarProfile = avatarResult.data as { avatar_url: string | null } | null
+    const avatarUrl = avatarProfile?.avatar_url ?? null
 
-    const managerName = managerBio
-      ? [managerBio.firstname, managerBio.lastname].filter(Boolean).join(' ') || null
-      : null
+    // Manager name from that manager's employee_biodata (not profiles)
+    let managerName: string | null = null
+    const managerAuthId = emp.manager_id
+    if (managerAuthId) {
+      const { data: managerEmpData } = await supabase
+        .from('employees')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('auth_id', managerAuthId)
+        .maybeSingle()
+
+      const managerEmp = managerEmpData as { id: string } | null
+      if (managerEmp) {
+        const { data: managerBioData } = await supabase
+          .from('employee_biodata')
+          .select('title, firstname, lastname')
+          .eq('organization_id', orgId)
+          .eq('employee_id', managerEmp.id)
+          .maybeSingle()
+
+        if (managerBioData) {
+          const bio = managerBioData as { title: string | null; firstname: string | null; lastname: string | null }
+          const parts = [bio.title, bio.firstname, bio.lastname].filter(Boolean)
+          managerName = parts.length > 0 ? (parts.join(' ') as string) : null
+        }
+      }
+    }
 
     // ── Requester names for change history ────────────────────────────────────
     const historyRaw = (historyResult.data ?? []) as Array<Record<string, unknown>>
@@ -351,6 +396,7 @@ export async function GET(
       job_role_code: role?.code ?? null,
       manager_name: managerName,
       location_address: location?.address ?? null,
+      avatar_url: avatarUrl,
     }
 
     const rawBio = (biodataResult.data ?? {}) as Record<string, unknown>

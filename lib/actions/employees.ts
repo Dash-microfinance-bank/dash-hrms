@@ -1,8 +1,69 @@
 'use server'
 
+import { randomBytes } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { Resend } from 'resend'
+
+// ── Auth / email helpers ──────────────────────────────────────────────────────
+
+function generateRandomPassword(): string {
+  const bytes = randomBytes(16).toString('base64url') // 22 url-safe chars
+  return `Dash@${bytes}` // ≥ 27 chars, upper + symbol → satisfies common policies
+}
+
+async function sendLoginDetailsEmail(
+  toEmail: string,
+  fullName: string | null,
+  password: string,
+  loginUrl: string
+): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    console.warn('[Employees] RESEND_API_KEY not set – skipping login details email')
+    return
+  }
+
+  const resend = new Resend(apiKey)
+  const displayName = fullName ?? toEmail
+
+  const { error } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL ?? 'Dash HRM <hr@dash-hrm.com>',
+    to: toEmail,
+    subject: 'Your Dash HRM login details',
+    html: `
+      <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto;">
+        <h2>Welcome to Dash HRM, ${displayName}!</h2>
+        <p>Your account has been created. Here are your login details:</p>
+        <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+          <tr>
+            <td style="padding: 8px; font-weight: bold; border: 1px solid #e2e8f0;">Email</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">${toEmail}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; font-weight: bold; border: 1px solid #e2e8f0;">Password</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">${password}</td>
+          </tr>
+        </table>
+        <p>
+          <a href="${loginUrl}" style="display: inline-block; background: #6c2cbe; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">
+            Sign in to Dash HRM
+          </a>
+        </p>
+        <p style="color: #64748b; font-size: 13px;">
+          We recommend changing your password after your first sign-in.
+        </p>
+      </div>
+    `,
+  })
+
+  if (error) {
+    console.warn('[Employees] Login details email failed (non-fatal):', error)
+  } else {
+    console.log('[Employees] ✅ Login details email sent to', toEmail)
+  }
+}
 
 const ADMIN_ROLES = ['super_admin', 'hr', 'finance'] as const
 
@@ -141,9 +202,13 @@ export async function createSingleEmployee(
     return { success: false, error: 'End date is required for fixed-term, temporary, intern, and contractor contracts' }
   }
 
-  // Validate manager
+  // Validate manager (manager_id is auth user id)
   if (input.manager_id) {
-    const { data: manager, error: managerError } = await supabase.from('employees').select('id, organization_id').eq('id', input.manager_id).single()
+    const { data: manager, error: managerError } = await supabase
+      .from('employees')
+      .select('id, organization_id')
+      .eq('auth_id', input.manager_id)
+      .single()
     if (managerError || !manager) return { success: false, error: 'Selected line manager was not found' }
     if (manager.organization_id !== orgId) return { success: false, error: 'Line manager must be from your organization' }
   }
@@ -155,15 +220,6 @@ export async function createSingleEmployee(
     if (location.organization_id !== orgId) return { success: false, error: 'Office location must belong to your organization' }
   }
 
-  // If creating a user account, validate the user email is not already registered
-  if (input.create_user_account) {
-    const userEmail = (input.user_email ?? '').trim().toLowerCase()
-    if (!userEmail) return { success: false, error: 'A valid email is required to create a user account' }
-
-    const adminCheck = createAdminClient()
-    const { data: authUserId } = await adminCheck.rpc('find_auth_user_id_by_email', { p_email: userEmail })
-    if (authUserId) return { success: false, error: 'A user account with this email already exists' }
-  }
 
   // ── Insert employee ──────────────────────────────────────────────────────
   const { data: employee, error: employeeError } = await supabase
@@ -204,78 +260,136 @@ export async function createSingleEmployee(
     console.error('[Employees] Failed to create biodata:', biodataError)
   }
 
-  // ── Create user account (optional) ──────────────────────────────────────
+  // ── Provision login account (optional) ──────────────────────────────────
   if (input.create_user_account) {
-    const userEmail = (input.user_email ?? '').trim().toLowerCase()
-    const userFirst = (input.user_first_name ?? firstname).trim()
-    const userLast = (input.user_last_name ?? lastname).trim()
-    const fullName = [userFirst, userLast].filter(Boolean).join(' ') || null
-    const roles = (input.roles ?? []).length > 0 ? input.roles! : ['employee']
-
     let adminClient
     try {
       adminClient = createAdminClient()
     } catch (err) {
-      // Employee created; cleanup and surface config error
       await supabase.from('employees').delete().eq('id', employee.id)
       const message = err instanceof Error ? err.message : 'Server configuration error'
       return { success: false, error: message }
     }
 
+    const generatedPassword = generateRandomPassword()
+    const fullName = [firstname, lastname].filter(Boolean).join(' ') || null
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL ??
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+    const loginUrl = `${baseUrl}/auth/login`
 
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-      userEmail,
-      {
-        redirectTo: `${baseUrl}/auth/callback`,
-        data: { full_name: fullName ?? undefined, name: fullName ?? undefined },
-      }
-    )
+    // Check whether an auth user with this email already exists
+    const { data: existingAuthIdData, error: lookupError } = await adminClient
+      .rpc('find_auth_user_id_by_email', { p_email: email })
 
-    if (inviteError) {
+    if (lookupError) {
       await supabase.from('employees').delete().eq('id', employee.id)
-      const msg = inviteError.message.toLowerCase()
-      if (msg.includes('already') || msg.includes('already registered') || msg.includes('already exists')) {
-        return { success: false, error: 'A user account with this email already exists.' }
-      }
-      return { success: false, error: `Employee could not be created: ${inviteError.message}` }
+      return { success: false, error: `User lookup failed: ${lookupError.message}` }
     }
 
-    const invitedUser = inviteData?.user
-    if (!invitedUser?.id) {
-      await supabase.from('employees').delete().eq('id', employee.id)
-      return { success: false, error: 'Invite succeeded but user ID was not returned' }
+    const existingAuthId = existingAuthIdData as string | null
+    let authUserId: string
+    let createdNewAuthUser = false
+
+    if (existingAuthId) {
+      // ── User already exists — multi-tenancy guard then reset password ──
+      authUserId = existingAuthId
+
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', authUserId)
+        .maybeSingle()
+
+      const existingOrgId = (existingProfile as { organization_id: string } | null)?.organization_id
+      if (existingOrgId && existingOrgId !== orgId) {
+        await supabase.from('employees').delete().eq('id', employee.id)
+        return { success: false, error: 'This email is already registered under a different organization' }
+      }
+
+      const { error: updateError } = await adminClient.auth.admin.updateUserById(authUserId, {
+        password: generatedPassword,
+      })
+
+      if (updateError) {
+        await supabase.from('employees').delete().eq('id', employee.id)
+        return { success: false, error: `Failed to update user credentials: ${updateError.message}` }
+      }
+    } else {
+      // ── New user — create with generated password (pre-confirmed, no magic link) ──
+      const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
+        email,
+        password: generatedPassword,
+        email_confirm: true,
+        user_metadata: { full_name: fullName ?? undefined, name: fullName ?? undefined },
+      })
+
+      if (createError) {
+        await supabase.from('employees').delete().eq('id', employee.id)
+        return { success: false, error: createError.message }
+      }
+
+      if (!createData?.user?.id) {
+        await supabase.from('employees').delete().eq('id', employee.id)
+        return { success: false, error: 'User creation succeeded but user id was not returned' }
+      }
+
+      authUserId = createData.user.id
+      createdNewAuthUser = true
     }
 
-    // Insert profile
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id: invitedUser.id,
-      organization_id: orgId,
-      full_name: fullName,
-      avatar_url: null,
-    })
+    // ── Upsert profile — id must match auth.users.id, full_name from biodata ──
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert(
+        { id: authUserId, organization_id: orgId, full_name: fullName },
+        { onConflict: 'id' }
+      )
 
     if (profileError) {
-      await adminClient.auth.admin.deleteUser(invitedUser.id)
+      if (createdNewAuthUser) await adminClient.auth.admin.deleteUser(authUserId)
       await supabase.from('employees').delete().eq('id', employee.id)
       return { success: false, error: profileError.message }
     }
 
-    // Insert roles
-    const { error: rolesError } = await supabase.from('user_roles').insert(
-      roles.map((role) => ({ user_id: invitedUser.id, role, organization_id: orgId }))
-    )
+    // ── Add 'employee' role — skip silently if it already exists ──
+    const { data: existingRole } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .eq('user_id', authUserId)
+      .eq('role', 'employee')
+      .eq('organization_id', orgId)
+      .maybeSingle()
 
-    if (rolesError) {
-      await supabase.from('profiles').delete().eq('id', invitedUser.id)
-      await adminClient.auth.admin.deleteUser(invitedUser.id)
-      await supabase.from('employees').delete().eq('id', employee.id)
-      return { success: false, error: rolesError.message }
+    if (!existingRole) {
+      const { error: roleError } = await supabase.from('user_roles').insert({
+        user_id: authUserId,
+        role: 'employee',
+        organization_id: orgId,
+      })
+      if (roleError) {
+        console.warn('[createSingleEmployee] Failed to insert employee role (non-fatal):', roleError.message)
+      }
     }
 
-    console.log('[createSingleEmployee] ✅ Auth account created for employee:', userEmail)
+    // ── Link employees.auth_id to the auth user ──
+    const { error: authIdError } = await supabase
+      .from('employees')
+      .update({ auth_id: authUserId })
+      .eq('id', employee.id)
+      .eq('organization_id', orgId)
+
+    if (authIdError) {
+      console.warn('[createSingleEmployee] Failed to update employees.auth_id (non-fatal):', authIdError.message)
+    }
+
+    // ── Email credentials (non-fatal) ──
+    await sendLoginDetailsEmail(email, fullName, generatedPassword, loginUrl)
+
+    console.log('[createSingleEmployee] ✅ Login account provisioned for:', email, {
+      authUserId,
+      existingUser: !!existingAuthId,
+    })
   }
 
   revalidatePath(EMPLOYEES_PATH)

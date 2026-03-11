@@ -172,19 +172,22 @@ function formatEmployeeName(employee: EmployeeRow): string {
 }
 
 function toLineManagerOptions(employees: EmployeeRow[]): LineManagerOption[] {
-  return employees.map((emp) => {
-    const name = formatEmployeeName(emp)
-    const jobRoleDisplay =
-      emp.job_role_title && emp.job_role_code?.trim()
-        ? `${emp.job_role_title} (${emp.job_role_code.trim()})`
-        : emp.job_role_title ?? '—'
-    return {
-      id: emp.id,
-      name,
-      jobRoleDisplay,
-      avatarUrl: emp.avatar_url ?? null,
-    }
-  })
+  return employees
+    .filter((emp) => !!emp.auth_id)
+    .map((emp) => {
+      const name = formatEmployeeName(emp)
+      const jobRoleDisplay =
+        emp.job_role_title && emp.job_role_code?.trim()
+          ? `${emp.job_role_title} (${emp.job_role_code.trim()})`
+          : emp.job_role_title ?? '—'
+      return {
+        id: emp.auth_id!,
+        employeeId: emp.id,
+        name,
+        jobRoleDisplay,
+        avatarUrl: emp.avatar_url ?? null,
+      }
+    })
 }
 
 type ExportRow = Record<string, string>
@@ -1244,6 +1247,7 @@ export function EmployeesTable({
         departments={departments}
         jobRoles={jobRoles}
         lineManagerOptions={lineManagerOptions}
+        managerStats={managerStats}
         locations={locations}
       />
 
