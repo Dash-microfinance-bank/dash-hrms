@@ -98,6 +98,8 @@ type CreateSingleEmployeeInput = CreateEmployeeInput & {
 
 const EMPLOYEES_PATH = '/dashboard/admin/employees'
 
+const ESS_PROFILE_REQUESTS_PATH = '/dashboard/profile/requests'
+
 async function getAdminContext() {
   const supabase = await createClient()
 
@@ -142,6 +144,53 @@ async function getAdminContext() {
     supabase: typeof supabase
     user: typeof user
     orgId: string
+  }
+}
+
+async function getEssEmployeeContext() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'Not authenticated' } as const
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.organization_id) {
+    return { error: 'Organization not found' } as const
+  }
+
+  const orgId = profile.organization_id as string
+
+  const { data: employee } = await supabase
+    .from('employees')
+    .select('id, organization_id, auth_id')
+    .eq('organization_id', orgId)
+    .eq('auth_id', user.id)
+    .single()
+
+  if (!employee) {
+    return { error: 'Employee record not found for current user' } as const
+  }
+
+  return {
+    supabase,
+    user,
+    orgId,
+    employeeId: employee.id as string,
+  } as {
+    supabase: typeof supabase
+    user: typeof user
+    orgId: string
+    employeeId: string
   }
 }
 
@@ -460,5 +509,284 @@ export async function exitEmployee(employeeId: string): Promise<EmployeeActionRe
   }
 
   revalidatePath(EMPLOYEES_PATH)
+  return { success: true }
+}
+
+type ProfileRequestedChangesSection = Record<string, unknown>
+
+export type EmployeeProfileUpdateRequestedChanges = {
+  employee?: ProfileRequestedChangesSection
+  biodata?: ProfileRequestedChangesSection
+  address?: ProfileRequestedChangesSection
+  bank_details?: ProfileRequestedChangesSection
+  next_of_kin?: ProfileRequestedChangesSection
+}
+
+export type EmployeeProfileUpdateRequestStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled'
+
+export type EmployeeProfileUpdateRequest = {
+  id: string
+  organization_id: string
+  employee_id: string
+  auth_user_id: string
+  status: EmployeeProfileUpdateRequestStatus
+  requested_changes: EmployeeProfileUpdateRequestedChanges
+  reviewed_by: string | null
+  reviewed_at: string | null
+  review_comment: string | null
+  effective_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export async function createEmployeeProfileUpdateRequest(
+  changes: EmployeeProfileUpdateRequestedChanges
+): Promise<EmployeeActionResult> {
+  const ctx = await getEssEmployeeContext()
+  if ('error' in ctx) return { success: false, error: ctx.error }
+
+  const { supabase, orgId, employeeId, user } = ctx
+
+  if (!changes || Object.keys(changes).length === 0) {
+    return { success: false, error: 'No changes provided' }
+  }
+
+  const requestedChanges = {
+    ...changes,
+  }
+
+  const { error } = await supabase.from('employee_profile_update_requests').insert({
+    organization_id: orgId,
+    employee_id: employeeId,
+    auth_user_id: user.id,
+    requested_changes: requestedChanges,
+  })
+
+  if (error) {
+    console.error('[Employees] Failed to create profile update request:', error)
+    return { success: false, error: 'Failed to submit profile update request' }
+  }
+
+  revalidatePath(ESS_PROFILE_REQUESTS_PATH)
+  return { success: true }
+}
+
+export async function getEmployeeProfileUpdateRequestsForCurrentUser(): Promise<
+  EmployeeProfileUpdateRequest[]
+> {
+  const ctx = await getEssEmployeeContext()
+  if ('error' in ctx) return []
+
+  const { supabase, orgId, employeeId, user } = ctx
+
+  const { data, error } = await supabase
+    .from('employee_profile_update_requests')
+    .select('*')
+    .eq('organization_id', orgId)
+    .eq('employee_id', employeeId)
+    .eq('auth_user_id', user.id)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('[Employees] Failed to fetch profile update requests for employee:', error)
+    return []
+  }
+
+  return (data ?? []) as EmployeeProfileUpdateRequest[]
+}
+
+export async function getPendingProfileUpdateRequestsForOrg(): Promise<
+  EmployeeProfileUpdateRequest[]
+> {
+  const ctx = await getAdminContext()
+  if ('error' in ctx) return []
+
+  const { supabase, orgId } = ctx
+
+  const { data, error } = await supabase
+    .from('employee_profile_update_requests')
+    .select('*')
+    .eq('organization_id', orgId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('[Employees] Failed to fetch pending profile update requests:', error)
+    return []
+  }
+
+  return (data ?? []) as EmployeeProfileUpdateRequest[]
+}
+
+type ReviewDecision = 'approve' | 'reject' | 'cancel'
+
+type ReviewProfileUpdateRequestInput = {
+  requestId: string
+  decision: ReviewDecision
+  reviewComment?: string
+}
+
+export async function reviewEmployeeProfileUpdateRequest(
+  input: ReviewProfileUpdateRequestInput
+): Promise<EmployeeActionResult> {
+  const ctx = await getAdminContext()
+  if ('error' in ctx) return { success: false, error: ctx.error }
+
+  const { supabase, orgId, user } = ctx
+
+  const { requestId, decision, reviewComment } = input
+
+  const { data: request, error: requestError } = await supabase
+    .from('employee_profile_update_requests')
+    .select('*')
+    .eq('id', requestId)
+    .eq('organization_id', orgId)
+    .single()
+
+  if (requestError || !request) {
+    return { success: false, error: 'Profile update request not found' }
+  }
+
+  if (request.status !== 'pending') {
+    return { success: false, error: 'Only pending requests can be reviewed' }
+  }
+
+  if (decision === 'cancel') {
+    const { error: cancelError } = await supabase
+      .from('employee_profile_update_requests')
+      .update({
+        status: 'cancelled',
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+        review_comment: reviewComment ?? null,
+      })
+      .eq('id', requestId)
+      .eq('organization_id', orgId)
+
+    if (cancelError) {
+      console.error('[Employees] Failed to cancel profile update request:', cancelError)
+      return { success: false, error: 'Failed to cancel profile update request' }
+    }
+
+    revalidatePath(ESS_PROFILE_REQUESTS_PATH)
+    return { success: true }
+  }
+
+  const requestedChanges = (request.requested_changes ?? {}) as EmployeeProfileUpdateRequestedChanges
+
+  const nowIso = new Date().toISOString()
+
+  if (decision === 'reject') {
+    const { error: rejectError } = await supabase
+      .from('employee_profile_update_requests')
+      .update({
+        status: 'rejected',
+        reviewed_by: user.id,
+        reviewed_at: nowIso,
+        review_comment: reviewComment ?? null,
+      })
+      .eq('id', requestId)
+      .eq('organization_id', orgId)
+
+    if (rejectError) {
+      console.error('[Employees] Failed to reject profile update request:', rejectError)
+      return { success: false, error: 'Failed to reject profile update request' }
+    }
+
+    revalidatePath(ESS_PROFILE_REQUESTS_PATH)
+    return { success: true }
+  }
+
+  const { employee_id: employeeId } = request as { employee_id: string }
+
+  const { employee, biodata, address, bank_details, next_of_kin } = requestedChanges
+
+  const updates: Array<Promise<void>> = []
+
+  if (employee && Object.keys(employee).length > 0) {
+    updates.push((async () => {
+      const { error } = await supabase
+        .from('employees')
+        .update(employee)
+        .eq('id', employeeId)
+        .eq('organization_id', orgId)
+      if (error) throw error
+    })())
+  }
+
+  if (biodata && Object.keys(biodata).length > 0) {
+    updates.push((async () => {
+      const { error } = await supabase
+        .from('employee_biodata')
+        .update(biodata)
+        .eq('employee_id', employeeId)
+        .eq('organization_id', orgId)
+      if (error) throw error
+    })())
+  }
+
+  if (address && Object.keys(address).length > 0) {
+    updates.push((async () => {
+      const { error } = await supabase
+        .from('employee_address')
+        .update(address)
+        .eq('employee_id', employeeId)
+        .eq('organization_id', orgId)
+      if (error) throw error
+    })())
+  }
+
+  if (bank_details && Object.keys(bank_details).length > 0) {
+    updates.push((async () => {
+      const { error } = await supabase
+        .from('employee_bank_details')
+        .update(bank_details)
+        .eq('employee_id', employeeId)
+        .eq('organization_id', orgId)
+      if (error) throw error
+    })())
+  }
+
+  if (next_of_kin && Object.keys(next_of_kin).length > 0) {
+    updates.push((async () => {
+      const { error } = await supabase
+        .from('employee_next_of_kin')
+        .update(next_of_kin)
+        .eq('employee_id', employeeId)
+        .eq('organization_id', orgId)
+      if (error) throw error
+    })())
+  }
+
+  const results = await Promise.allSettled(updates)
+  const failed = results.find((r) => r.status === 'rejected')
+
+  if (failed) {
+    console.error('[Employees] Failed to apply one or more profile update changes:', failed)
+    return { success: false, error: 'Failed to apply one or more profile updates' }
+  }
+
+  const { error: approveError } = await supabase
+    .from('employee_profile_update_requests')
+    .update({
+      status: 'approved',
+      reviewed_by: user.id,
+      reviewed_at: nowIso,
+      review_comment: reviewComment ?? null,
+      effective_at: nowIso,
+    })
+    .eq('id', requestId)
+    .eq('organization_id', orgId)
+
+  if (approveError) {
+    console.error('[Employees] Failed to mark profile update request as approved:', approveError)
+    return { success: false, error: 'Profile changes applied but request status could not be updated' }
+  }
+
+  revalidatePath(ESS_PROFILE_REQUESTS_PATH)
   return { success: true }
 }

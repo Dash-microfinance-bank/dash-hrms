@@ -45,10 +45,7 @@ const Navbar = () => {
     return (
         <>
             <nav className='w-full flex justify-between items-center px-3 lg:px-20 py-4 sticky top-0 left-0 z-40 navbar backdrop-blur-sm bg-[#FBF7FD]/95 border-b border-slate-200'>
-                <Link href={"/"} className="transition-smooth hover:opacity-80" aria-label="Dash Home">
-                    {/* <Image className='w-24' src={Logo} width={500} height={500} alt='Dash MFB Logo' priority /> */}
-                    DashHR
-                </Link>
+                <Link href={"/"} className="transition-smooth hover:opacity-80" aria-label="Dash Home">DashHR</Link>
                 <div className='hidden xl:flex justify-between items-center space-x-2 text-sm font-medium'>
                     {/* <Link className='py-2 px-4 transition-smooth hover:text-primary rounded-lg' href={"/"}>Home</Link> */}
                     <div className='relative personal-banking-dropdown py-2 px-4' onMouseEnter={() => setDropdown("personal")} onMouseLeave={() => setDropdown(null)}>
@@ -76,10 +73,10 @@ const Navbar = () => {
                             role="menu"
                             aria-label="Personal Banking Submenu">
                             <div className='bg-white py-4 space-y-0 shadow-lg rounded-lg border border-gray-100'>
-                                <li><Link href={"/personal/account"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Profile Update</Link></li>
-                                <li><Link href={"/personal/payments"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Leave</Link></li>
-                                <li><Link href={"/personal/debitcards"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Raise a grievance</Link></li>
-                                <li><Link href={"/loan-request/psl"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Exit</Link></li>
+                                <li><Link href={"/dashboard/profile-update-request"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Profile Update</Link></li>
+                                <li><Link href={"/"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Leave</Link></li>
+                                <li><Link href={"/"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Raise a grievance</Link></li>
+                                <li><Link href={"/"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Exit</Link></li>
                             </div>
                         </ul>
                     </div>
@@ -110,7 +107,7 @@ const Navbar = () => {
                             aria-label="Business Banking Submenu"
                         >
                             <div className='bg-white py-4 space-y-0 shadow-lg rounded-lg border border-gray-100'>
-                                <li><Link href={"/business/account"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Payslip</Link></li>
+                                <li><Link href={"/"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Payslip</Link></li>
                             </div>
                         </ul>
                     </div>
@@ -142,8 +139,8 @@ const Navbar = () => {
                         >
                             <div className='bg-white py-4 space-y-0 shadow-lg rounded-lg border border-gray-100'>
                                 {/* <li><Link href={"/team"} className='block py-3 px-5 transition-smooth hover:bg-slate-100 rounded-lg hover:translate-x-1' role="menuitem">Team</Link></li> */}
-                                <li><Link href={"/faqs"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Documents</Link></li>
-                                <li><Link href={""} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Organogram</Link></li>
+                                <li><Link href={"/"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Documents</Link></li>
+                                <li><Link href={"/"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Organogram</Link></li>
                             </div>
                         </ul>
                     </div>
@@ -386,7 +383,6 @@ const Navbar = () => {
                 <nav className='w-full flex justify-between items-center px-3 lg:px-10 py-5 sticky top-0 left-0'>
                     {dropdown === null ? (
                         <Link href={"/"} className="transition-smooth hover:opacity-80" aria-label="Dash MFB Home">
-                            {/* <Image className='w-24 transition-smooth hover:scale-105' src={Logo} width={500} height={500} alt='Dash MFB Logo' /> */}
                             <span className="text-2xl font-bold">Logo</span>
                         </Link>
                     ) : (
@@ -473,17 +469,17 @@ const Navbar = () => {
                             ? "opacity-100 translate-x-0" 
                             : "opacity-0 translate-x-4 pointer-events-none absolute"
                     }`}>
-                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/personal/account"}>Profile update</Link>
-                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/personal/payments"}>Leave</Link>
-                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/personal/debitcards"}>Raise a grievance</Link>
-                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/loan-request/psl"}>Exit</Link>
+                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/dashboard/profile-update-request"}>Profile update</Link>
+                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/"}>Leave</Link>
+                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/"}>Raise a grievance</Link>
+                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/"}>Exit</Link>
                     </div>
                     <div className={`business-category space-y-5 transition-all duration-300 ease-out ${
                         dropdown === "business" 
                             ? "opacity-100 translate-x-0" 
                             : "opacity-0 translate-x-4 pointer-events-none absolute"
                     }`}>
-                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/business/account"}>Payslip</Link>
+                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/"}>Payslip</Link>
                     </div>
                     <div className={`Company-category space-y-5 transition-all duration-300 ease-out ${
                         dropdown === "company" 
@@ -491,8 +487,8 @@ const Navbar = () => {
                             : "opacity-0 translate-x-4 pointer-events-none absolute"
                     }`}>
                         {/* <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/team"}>Team</Link> */}
-                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/faqs"}>Documents</Link>
-                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={""}>Organogram</Link>
+                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/"}>Documents</Link>
+                        <Link className='block py-2 text-xl font-medium transition-smooth hover:text-primary hover:translate-x-2' href={"/"}>Organogram</Link>
                     </div>
                 </div>
             </div>

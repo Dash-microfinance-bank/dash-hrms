@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { Building2, Briefcase, TrendingUp, Users, LogOut, Settings, MapPin, Upload, UserPlus, BarChart2 } from 'lucide-react'
+import { Building2, Briefcase, TrendingUp, Users, LogOut, Settings, MapPin, Upload, UserPlus, BarChart2, UserCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
@@ -41,6 +41,7 @@ const hrisNavItems = [
   { label: 'All Employees', href: '/dashboard/admin/employees', icon: Users },
   { label: 'Add Employee (Single)', href: '/dashboard/admin/employees/single-upload', icon: UserPlus },
   { label: 'Add Employees (Bulk)', href: '/dashboard/admin/employees/bulk-upload', icon: Upload },
+  { label: 'Profile Update Requests', href: '/dashboard/admin/employees/profile-update-requests', icon: UserCheck },
   { label: 'Employee Self Service Settings', href: '/dashboard/admin/settings/employees', icon: Settings },
 ] as const
 
