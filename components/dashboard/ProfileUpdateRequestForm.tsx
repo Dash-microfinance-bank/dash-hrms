@@ -264,6 +264,12 @@ const INPUT_BASE =
 const SELECT_BASE =
   'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
 
+const NEXT_OF_KIN_PURPOSE_OPTIONS = [
+  { value: 'Benefit', label: 'Benefit' },
+  { value: 'Emergency', label: 'Emergency' },
+  { value: 'Benefit and Emergency', label: 'Benefit and Emergency' },
+] as const
+
 type FieldDef = {
   field_key: string
   label: string
@@ -515,7 +521,12 @@ const personSchema = z.object({
 type PersonForm = z.infer<typeof personSchema>
 
 const nextOfKinSchema = personSchema.extend({
-  purpose: z.string().min(1, 'Purpose is required').max(100, 'Too long'),
+  purpose: z
+    .string()
+    .min(1, 'Purpose is required')
+    .refine((v) => ['Benefit', 'Emergency', 'Benefit and Emergency'].includes(v), {
+      message: 'Please select Benefit, Emergency, or Benefit and Emergency',
+    }),
 })
 
 type NextOfKinForm = z.infer<typeof nextOfKinSchema>
@@ -935,7 +946,21 @@ function NextOfKinCreateSection({
             <div className="space-y-1"><FL>Email</FL><Input value={form.email} onChange={(e) => s('email')(e.target.value)} className={cn(INPUT_BASE, errors.email && 'border-destructive')} placeholder="Add email address" />{errors.email ? <p className="ml-1 text-xs text-destructive">{errors.email}</p> : null}</div>
             <div className="space-y-1"><FL>Phone</FL><Input value={form.phone} onChange={(e) => s('phone')(e.target.value)} className={cn(INPUT_BASE, errors.phone && 'border-destructive')} placeholder="Add phone number" />{errors.phone ? <p className="ml-1 text-xs text-destructive">{errors.phone}</p> : null}</div>
             <div className="space-y-1"><FL>Relationship</FL><Input value={form.relationship} onChange={(e) => s('relationship')(e.target.value)} className={cn(INPUT_BASE, errors.relationship && 'border-destructive')} placeholder="Your relationship with this person?" />{errors.relationship ? <p className="ml-1 text-xs text-destructive">{errors.relationship}</p> : null}</div>
-            <div className="space-y-1"><FL>Purpose</FL><Input value={form.purpose} onChange={(e) => s('purpose')(e.target.value)} className={cn(INPUT_BASE, errors.purpose && 'border-destructive')} placeholder="Your purpose for adding this person as next of kin" />{errors.purpose ? <p className="ml-1 text-xs text-destructive">{errors.purpose}</p> : null}</div>
+            <div className="space-y-1">
+              <FL>Purpose</FL>
+              <select
+                value={form.purpose}
+                onChange={(e) => s('purpose')(e.target.value)}
+                aria-label="Purpose"
+                className={cn(SELECT_BASE, errors.purpose && 'border-destructive')}
+              >
+                <option value="">Select…</option>
+                {NEXT_OF_KIN_PURPOSE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              {errors.purpose ? <p className="ml-1 text-xs text-destructive">{errors.purpose}</p> : null}
+            </div>
             <div className="space-y-1 sm:col-span-2"><FL>Address</FL><Input value={form.address} onChange={(e) => s('address')(e.target.value)} className={cn(INPUT_BASE, errors.address && 'border-destructive')} placeholder="Add house address of next of kin" />{errors.address ? <p className="ml-1 text-xs text-destructive">{errors.address}</p> : null}</div>
           </div>
           <div className="flex justify-end gap-2">

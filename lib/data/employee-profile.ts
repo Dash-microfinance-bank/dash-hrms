@@ -142,6 +142,108 @@ export async function getCurrentEmployeeProfileForEss(): Promise<FlatProfile | n
   return flat
 }
 
+/**
+ * Loads a flat profile map for a given employee (by id). Uses current user's org.
+ * For use in admin/HR context when reviewing a profile update request.
+ */
+export async function getEmployeeProfileByEmployeeId(
+  employeeId: string
+): Promise<FlatProfile | null> {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+  const orgId = (profile as { organization_id: string } | null)?.organization_id
+  if (!orgId) return null
+
+  const [
+    { data: emp },
+    { data: biodata },
+    { data: address },
+    { data: bank },
+    { data: nok },
+  ] = await Promise.all([
+    supabase
+      .from('employees')
+      .select('email, phone')
+      .eq('id', employeeId)
+      .eq('organization_id', orgId)
+      .single(),
+    supabase
+      .from('employee_biodata')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .eq('organization_id', orgId)
+      .maybeSingle(),
+    supabase
+      .from('employee_address')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .eq('organization_id', orgId)
+      .maybeSingle(),
+    supabase
+      .from('employee_bank_details')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .eq('organization_id', orgId)
+      .maybeSingle(),
+    supabase
+      .from('employee_next_of_kin')
+      .select('*')
+      .eq('employee_id', employeeId)
+      .eq('organization_id', orgId)
+      .order('created_at')
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  const flat: FlatProfile = {}
+
+  if (emp) {
+    const e = emp as { email: string; phone: string | null }
+    flat['employees.email'] = e.email
+    flat['employees.phone'] = e.phone
+  }
+
+  const skipBiodata = new Set([...SKIP_BASE, 'created_at', 'updated_at'])
+  if (biodata) {
+    for (const [k, v] of Object.entries(biodata as Record<string, unknown>)) {
+      if (!skipBiodata.has(k)) flat[`employee_biodata.${k}`] = v
+    }
+  }
+
+  const skipAddress = new Set([...SKIP_BASE])
+  if (address) {
+    for (const [k, v] of Object.entries(address as Record<string, unknown>)) {
+      if (!skipAddress.has(k)) flat[`employee_address.${k}`] = v
+    }
+  }
+
+  const skipBank = new Set([...SKIP_BASE])
+  if (bank) {
+    for (const [k, v] of Object.entries(bank as Record<string, unknown>)) {
+      if (!skipBank.has(k)) flat[`employee_bank_details.${k}`] = v
+    }
+  }
+
+  const skipNok = new Set([...SKIP_BASE, 'created_at', 'purpose'])
+  if (nok) {
+    for (const [k, v] of Object.entries(nok as Record<string, unknown>)) {
+      if (!skipNok.has(k)) flat[`employee_next_of_kin.${k}`] = v
+    }
+  }
+
+  return flat
+}
+
 // ─── Pending fields ───────────────────────────────────────────────────────────
 
 /**

@@ -29,8 +29,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import Link from 'next/link'
 import type { ProfileUpdateRequestListRow } from '@/lib/data/profile-update-requests'
+import ProfileUpdateRequestModal from './ProfileUpdateRequestModal'
 
 type ProfileUpdateRequestsTableProps = {
   requests: ProfileUpdateRequestListRow[]
@@ -84,6 +84,7 @@ export function ProfileUpdateRequestsTable({
     { id: 'submitted_at', desc: true },
   ])
   const [globalFilter, setGlobalFilter] = useState('')
+  const [reviewRequestId, setReviewRequestId] = useState<string | null>(null)
 
   const columns = useMemo<ColumnDef<ProfileUpdateRequestListRow>[]>(
     () => [
@@ -135,11 +136,7 @@ export function ProfileUpdateRequestsTable({
             <button
               type="button"
               className="flex items-center gap-2 cursor-pointer text-left"
-              onClick={() =>
-                router.push(
-                  `/dashboard/admin/employees/profile-update-requests/${request.id}`
-                )
-              }
+              onClick={() => setReviewRequestId(request.id)}
             >
               <Avatar size="sm" className="size-8 shrink-0">
                 {request.avatar_url ? (
@@ -245,19 +242,15 @@ export function ProfileUpdateRequestsTable({
             <Button
               size="sm"
               className="text-xs"
-              asChild
+              onClick={() => setReviewRequestId(request.id)}
             >
-              <Link
-                href={`/dashboard/admin/employees/profile-update-requests/${request.id}`}
-              >
-                Review
-              </Link>
+              Review
             </Button>
           )
         },
       },
     ],
-    [router]
+    []
   )
 
   const table = useReactTable({
@@ -369,6 +362,16 @@ export function ProfileUpdateRequestsTable({
           </div>
         </div>
       )}
+
+      <ProfileUpdateRequestModal
+        requestId={reviewRequestId}
+        open={!!reviewRequestId}
+        onOpenChange={(o) => !o && setReviewRequestId(null)}
+        onSuccess={() => {
+          setReviewRequestId(null)
+          router.refresh()
+        }}
+      />
     </div>
   )
 }
