@@ -1,6 +1,6 @@
 "use client"
 
-import Image from 'next/image'
+// import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -15,7 +15,7 @@ const Navbar = () => {
 
     const [ open, setOpen ] = useState<boolean>(false)
     const [ dropdown, setDropdown ] = useState<null | "personal" | "business" | "company">(null)
-    const [ showAppModal, setShowAppModal ] = useState<boolean>(false)
+    // const [ showAppModal, setShowAppModal ] = useState<boolean>(false)
     const [ showNotifications, setShowNotifications ] = useState<boolean>(false)
     const [ showUserMenu, setShowUserMenu ] = useState<boolean>(false)
 

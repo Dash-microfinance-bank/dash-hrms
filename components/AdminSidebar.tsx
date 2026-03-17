@@ -25,7 +25,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { Building2, Briefcase, TrendingUp, Users, LogOut, Settings, MapPin, Upload, UserPlus, BarChart2, UserCheck } from 'lucide-react'
+import {
+  BarChart2,
+  Building2,
+  Briefcase,
+  FileText,
+  Layers,
+  LogOut,
+  MapPin,
+  Settings,
+  TrendingUp,
+  Upload,
+  UserCheck,
+  UserPlus,
+  Users,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
@@ -43,6 +57,12 @@ const hrisNavItems = [
   { label: 'Add Employees (Bulk)', href: '/dashboard/admin/employees/bulk-upload', icon: Upload },
   { label: 'Profile Update Requests', href: '/dashboard/admin/employees/profile-update-requests', icon: UserCheck },
   { label: 'Employee Self Service Settings', href: '/dashboard/admin/settings/employees', icon: Settings },
+] as const
+
+const documentsNavItems = [
+  { label: 'All documents', href: '/dashboard/admin/documents', icon: FileText },
+  { label: 'Document categories', href: '/dashboard/admin/document-categories', icon: Layers },
+  { label: 'Document types', href: '/dashboard/admin/document-types', icon: Briefcase },
 ] as const
 
 export function AdminSidebar() {
@@ -95,6 +115,32 @@ export function AdminSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {hrisNavItems.map((item) => {
+                const Icon = item.icon
+                const isActive = pathname === item.href
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      className={cn(isActive && 'bg-primary! text-white!')}
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.label}
+                    >
+                      <Link href={item.href}>
+                        <Icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Documents</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {documentsNavItems.map((item) => {
                 const Icon = item.icon
                 const isActive = pathname === item.href
                 return (
