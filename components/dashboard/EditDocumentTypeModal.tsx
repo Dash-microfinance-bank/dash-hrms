@@ -25,6 +25,7 @@ const schema = z.object({
   document_category_id: z.string().min(1, 'Category is required'),
   is_required: z.boolean(),
   approval_required: z.boolean(),
+  allow_multiple: z.boolean(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -44,6 +45,8 @@ export function EditDocumentTypeModal({
   onOpenChange,
   onSuccess,
 }: EditDocumentTypeModalProps) {
+  const isOrganizationLevel = documentType?.owner_type === 'ORGANIZATION'
+
   const {
     register,
     handleSubmit,
@@ -56,17 +59,29 @@ export function EditDocumentTypeModal({
           document_category_id: documentType.document_category_id ?? '',
           is_required: documentType.is_required,
           approval_required: documentType.approval_required,
+          allow_multiple: documentType.allow_multiple ?? false,
         }
-      : { name: '', document_category_id: '', is_required: false, approval_required: false },
+      : {
+          name: '',
+          document_category_id: '',
+          is_required: false,
+          approval_required: false,
+          allow_multiple: false,
+        },
   })
 
   const onSubmit = async (values: FormValues) => {
     if (!documentType) return
+    const isOrganizationLevel = documentType.owner_type === 'ORGANIZATION'
+
     const result = await updateDocumentType(documentType.id, {
       name: values.name,
       document_category_id: values.document_category_id,
-      is_required: values.is_required,
-      approval_required: values.approval_required,
+      is_required: isOrganizationLevel ? documentType.is_required : values.is_required,
+      approval_required: isOrganizationLevel
+        ? documentType.approval_required
+        : values.approval_required,
+      allow_multiple: values.allow_multiple,
     })
     if (result.success) {
       toast.success('Document type updated')
@@ -118,27 +133,57 @@ export function EditDocumentTypeModal({
               <p className="text-xs text-destructive">{errors.document_category_id.message}</p>
             ) : null}
           </div>
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="edit-doctype-required"
-                {...register('is_required')}
-                className="size-4 rounded border-input"
-              />
-              <Label htmlFor="edit-doctype-required" className="font-normal cursor-pointer">
-                Required
-              </Label>
+          {isOrganizationLevel && (
+            <div className="space-y-2">
+              <Label htmlFor="edit-doctype-owner-type">Applies to</Label>
+              <select
+                id="edit-doctype-owner-type"
+                disabled
+                className="flex h-9 w-full rounded-md border border-input bg-muted px-3 py-1 text-sm shadow-sm opacity-75"
+                value={documentType?.owner_type ?? ''}
+              >
+                <option value="USER">Employee</option>
+                <option value="ORGANIZATION">Company</option>
+                <option value="DEPARTMENT">Department</option>
+              </select>
             </div>
+          )}
+          <div className="flex flex-col gap-3">
+            {!isOrganizationLevel && (
+              <>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="edit-doctype-required"
+                    {...register('is_required')}
+                    className="size-4 rounded border-input"
+                  />
+                  <Label htmlFor="edit-doctype-required" className="font-normal cursor-pointer">
+                    Required
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="edit-doctype-approval"
+                    {...register('approval_required')}
+                    className="size-4 rounded border-input"
+                  />
+                  <Label htmlFor="edit-doctype-approval" className="font-normal cursor-pointer">
+                    Approval required
+                  </Label>
+                </div>
+              </>
+            )}
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                id="edit-doctype-approval"
-                {...register('approval_required')}
+                id="edit-doctype-allow-multiple"
+                {...register('allow_multiple')}
                 className="size-4 rounded border-input"
               />
-              <Label htmlFor="edit-doctype-approval" className="font-normal cursor-pointer">
-                Approval required
+              <Label htmlFor="edit-doctype-allow-multiple" className="font-normal cursor-pointer">
+                Allow multiple uploads
               </Label>
             </div>
           </div>

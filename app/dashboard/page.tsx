@@ -67,7 +67,7 @@ export default async function DashboardPage() {
   }
 
   // ── Derived display values for header card ───────────────────────────────────
-  const avatarUrl = (profile.avatar_url as string | null) ?? null
+  const avatarUrl = employee.avatar_url ?? ((profile.avatar_url as string | null) ?? null)
   const initials =
     ((employee.biodata_firstname?.[0] ?? '') + (employee.biodata_lastname?.[0] ?? '')).toUpperCase() ||
     (employee.email?.[0] ?? '?').toUpperCase()

@@ -54,6 +54,7 @@ type RawEmployeeRow = {
   job_role_id: string
   manager_id: string | null
   report_location: string | null
+  avatar_url: string | null
 }
 
 /**
@@ -89,7 +90,7 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
     supabase
       .from('employees')
       .select(
-        'id, organization_id, auth_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id, report_location'
+        'id, organization_id, auth_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id, report_location, avatar_url'
       )
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false }),
@@ -152,37 +153,6 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
     total_count: number
   }>
 
-  // Create a map of employee_id -> avatar_url (sourced from profiles via auth_id)
-  const avatarByEmployeeId = new Map<string, string | null>()
-  const authIds = Array.from(
-    new Set(
-      employees
-        .map((emp) => emp.auth_id)
-        .filter((id): id is string => !!id)
-    )
-  )
-  if (authIds.length > 0) {
-    const { data: profilesData, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, avatar_url')
-      .in('id', authIds)
-
-    if (profilesError) {
-      console.error('[Employees] Failed to fetch profile avatars:', profilesError)
-    }
-
-    const avatarByProfileId = new Map<string, string | null>()
-    for (const p of (profilesData ?? []) as Array<{ id: string; avatar_url: string | null }>) {
-      avatarByProfileId.set(p.id, p.avatar_url ?? null)
-    }
-
-    for (const emp of employees) {
-      if (emp.auth_id) {
-        avatarByEmployeeId.set(emp.id, avatarByProfileId.get(emp.auth_id) ?? null)
-      }
-    }
-  }
-
   const completionByEmployeeId = new Map<string, number>()
   for (const c of completionRecords) {
     const total = c.total_count && c.total_count > 0 ? c.total_count : 63
@@ -234,7 +204,7 @@ export async function getEmployeesForCurrentOrg(): Promise<EmployeeRow[]> {
     const dept = departmentById.get(emp.department_id)
     const jr = jobRoleById.get(emp.job_role_id)
     const bio = biodataByEmployeeId.get(emp.id)
-    const avatarUrl = avatarByEmployeeId.get(emp.id) ?? null
+    const avatarUrl = emp.avatar_url ?? null
     const profileCompletionPct = completionByEmployeeId.get(emp.id) ?? 0
 
     return {

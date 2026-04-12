@@ -2,9 +2,11 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+type DocumentTypeOwnerType = 'USER' | 'ORGANIZATION' | 'DEPARTMENT'
+
 /**
  * Logical shape used everywhere in the app (table, modals, actions).
- * DB column names differ:  category_id, required, requires_approval.
+ * DB column names differ:  category_id, required, requires_approval, owner_type.
  * The fetch function maps them explicitly below.
  */
 export type DocumentTypeRow = {
@@ -14,8 +16,10 @@ export type DocumentTypeRow = {
   document_category_id: string | null  // DB: category_id
   is_required: boolean                 // DB: required
   approval_required: boolean           // DB: requires_approval
+  allow_multiple: boolean
   has_expiry: boolean
   created_at: string
+  owner_type: DocumentTypeOwnerType | null
   document_categories?: { name: string } | null
 }
 
@@ -27,8 +31,10 @@ type RawDocumentTypeRow = {
   category_id: string | null
   required: boolean
   requires_approval: boolean
+  allow_multiple?: boolean
   has_expiry: boolean
   created_at: string
+  owner_type?: DocumentTypeOwnerType | null
 }
 
 /**
@@ -46,8 +52,10 @@ function mapRow(
     document_category_id: raw.category_id,
     is_required: raw.required ?? false,
     approval_required: raw.requires_approval ?? false,
+    allow_multiple: raw.allow_multiple ?? false,
     has_expiry: raw.has_expiry ?? false,
     created_at: raw.created_at,
+    owner_type: raw.owner_type ?? null,
     document_categories:
       raw.category_id && categoryNameById.has(raw.category_id)
         ? { name: categoryNameById.get(raw.category_id)! }
@@ -82,7 +90,9 @@ export async function getDocumentTypesForCurrentOrg(): Promise<DocumentTypeRow[]
   // Select real DB column names — no aliasing, no magic casts.
   const { data: rawData, error } = await supabase
     .from('document_types')
-    .select('id, organization_id, name, category_id, required, requires_approval, has_expiry, created_at')
+    .select(
+      'id, organization_id, name, category_id, required, requires_approval, allow_multiple, has_expiry, created_at, owner_type',
+    )
     .eq('organization_id', orgId)
     .order('name', { ascending: true })
 

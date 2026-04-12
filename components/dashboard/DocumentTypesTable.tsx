@@ -46,7 +46,7 @@ export function DocumentTypesTable({ data, categories }: DocumentTypesTableProps
   const [createOpen, setCreateOpen] = useState(false)
   const [editingType, setEditingType] = useState<DocumentTypeRow | null>(null)
   const [deletingType, setDeletingType] = useState<DocumentTypeRow | null>(null)
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }])
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }])
   const [globalFilter, setGlobalFilter] = useState('')
 
   const columns = useMemo<ColumnDef<DocumentTypeRow>[]>(
@@ -54,9 +54,10 @@ export function DocumentTypesTable({ data, categories }: DocumentTypesTableProps
       {
         id: 'sn',
         header: 'S/N',
-        cell: ({ row }) => {
-          // Simple serial number within the current page
-          return row.index + 1
+        cell: ({ row, table }) => {
+          const pageIndex = table.getState().pagination.pageIndex
+          const pageSize = table.getState().pagination.pageSize
+          return pageIndex * pageSize + row.index + 1
         },
         size: 50,
         enableSorting: false,

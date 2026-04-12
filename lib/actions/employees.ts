@@ -526,22 +526,24 @@ export type EmployeeProfileUpdateRequestStatus =
   | 'pending'
   | 'approved'
   | 'rejected'
-  | 'cancelled'
+  | 'partially_approved'
 
 export type EmployeeProfileUpdateRequest = {
   id: string
   organization_id: string
   employee_id: string
-  auth_user_id: string
   status: EmployeeProfileUpdateRequestStatus
   requested_changes: EmployeeProfileUpdateRequestedChanges
   reviewed_by: string | null
   reviewed_at: string | null
-  review_comment: string | null
-  effective_at: string | null
+  rejection_reason: string | null
   created_at: string
   updated_at: string
 }
+
+const APPROVAL_REQUEST_TYPE_PROFILE_UPDATE = 'PROFILE_UPDATE'
+const APPROVAL_REQUEST_SOURCE_ESS_PROFILE_FORM = 'ESS_PROFILE_FORM'
+const LEGACY_REQUESTED_CHANGES_FIELD = 'legacy.requested_changes'
 
 export async function createEmployeeProfileUpdateRequest(
   changes: EmployeeProfileUpdateRequestedChanges
@@ -549,7 +551,7 @@ export async function createEmployeeProfileUpdateRequest(
   const ctx = await getEssEmployeeContext()
   if ('error' in ctx) return { success: false, error: ctx.error }
 
-  const { supabase, orgId, employeeId, user } = ctx
+  const { supabase, orgId, employeeId } = ctx
 
   if (!changes || Object.keys(changes).length === 0) {
     return { success: false, error: 'No changes provided' }
@@ -559,15 +561,42 @@ export async function createEmployeeProfileUpdateRequest(
     ...changes,
   }
 
-  const { error } = await supabase.from('employee_profile_update_requests').insert({
-    organization_id: orgId,
-    employee_id: employeeId,
-    auth_user_id: user.id,
-    requested_changes: requestedChanges,
-  })
+  const { data: request, error } = await supabase
+    .from('approval_requests')
+    .insert({
+      organization_id: orgId,
+      employee_id: employeeId,
+      status: 'pending',
+      request_type: APPROVAL_REQUEST_TYPE_PROFILE_UPDATE,
+      source: APPROVAL_REQUEST_SOURCE_ESS_PROFILE_FORM,
+    })
+    .select('id')
+    .single()
 
   if (error) {
     console.error('[Employees] Failed to create profile update request:', error)
+    return { success: false, error: 'Failed to submit profile update request' }
+  }
+
+  const requestId = (request as { id: string }).id
+  const { error: itemError } = await supabase.from('approval_items').insert({
+    request_id: requestId,
+    organization_id: orgId,
+    item_type: 'FIELD',
+    document_version_id: null,
+    field_name: LEGACY_REQUESTED_CHANGES_FIELD,
+    field_group: 'ESS Profile Form',
+    old_value: null,
+    new_value: requestedChanges,
+    status: 'pending',
+    operation: 'field_update',
+    target_table: null,
+    target_row_id: null,
+  })
+
+  if (itemError) {
+    console.error('[Employees] Failed to create profile update request item:', itemError)
+    await supabase.from('approval_requests').delete().eq('id', requestId)
     return { success: false, error: 'Failed to submit profile update request' }
   }
 
@@ -581,14 +610,15 @@ export async function getEmployeeProfileUpdateRequestsForCurrentUser(): Promise<
   const ctx = await getEssEmployeeContext()
   if ('error' in ctx) return []
 
-  const { supabase, orgId, employeeId, user } = ctx
+  const { supabase, orgId, employeeId } = ctx
 
   const { data, error } = await supabase
-    .from('employee_profile_update_requests')
-    .select('*')
+    .from('approval_requests')
+    .select('id, organization_id, employee_id, status, reviewed_by, reviewed_at, rejection_reason, created_at, updated_at')
     .eq('organization_id', orgId)
     .eq('employee_id', employeeId)
-    .eq('auth_user_id', user.id)
+    .eq('request_type', APPROVAL_REQUEST_TYPE_PROFILE_UPDATE)
+    .eq('source', APPROVAL_REQUEST_SOURCE_ESS_PROFILE_FORM)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -596,7 +626,29 @@ export async function getEmployeeProfileUpdateRequestsForCurrentUser(): Promise<
     return []
   }
 
-  return (data ?? []) as EmployeeProfileUpdateRequest[]
+  const requests = (data ?? []) as Array<Omit<EmployeeProfileUpdateRequest, 'requested_changes'>>
+  if (requests.length === 0) return []
+
+  const requestIds = requests.map((r) => r.id)
+  const { data: itemsData } = await supabase
+    .from('approval_items')
+    .select('request_id, new_value')
+    .in('request_id', requestIds)
+    .eq('item_type', 'FIELD')
+    .eq('field_name', LEGACY_REQUESTED_CHANGES_FIELD)
+
+  const changesByRequestId = new Map<string, EmployeeProfileUpdateRequestedChanges>()
+  for (const row of (itemsData ?? []) as Array<{ request_id: string; new_value: unknown }>) {
+    changesByRequestId.set(
+      row.request_id,
+      (row.new_value as EmployeeProfileUpdateRequestedChanges | null) ?? {}
+    )
+  }
+
+  return requests.map((r) => ({
+    ...r,
+    requested_changes: changesByRequestId.get(r.id) ?? {},
+  }))
 }
 
 export async function getPendingProfileUpdateRequestsForOrg(): Promise<
@@ -608,9 +660,11 @@ export async function getPendingProfileUpdateRequestsForOrg(): Promise<
   const { supabase, orgId } = ctx
 
   const { data, error } = await supabase
-    .from('employee_profile_update_requests')
-    .select('*')
+    .from('approval_requests')
+    .select('id, organization_id, employee_id, status, reviewed_by, reviewed_at, rejection_reason, created_at, updated_at')
     .eq('organization_id', orgId)
+    .eq('request_type', APPROVAL_REQUEST_TYPE_PROFILE_UPDATE)
+    .eq('source', APPROVAL_REQUEST_SOURCE_ESS_PROFILE_FORM)
     .eq('status', 'pending')
     .order('created_at', { ascending: true })
 
@@ -619,7 +673,8 @@ export async function getPendingProfileUpdateRequestsForOrg(): Promise<
     return []
   }
 
-  return (data ?? []) as EmployeeProfileUpdateRequest[]
+  const requests = (data ?? []) as Array<Omit<EmployeeProfileUpdateRequest, 'requested_changes'>>
+  return requests.map((r) => ({ ...r, requested_changes: {} }))
 }
 
 type ReviewDecision = 'approve' | 'reject' | 'cancel'
@@ -641,10 +696,12 @@ export async function reviewEmployeeProfileUpdateRequest(
   const { requestId, decision, reviewComment } = input
 
   const { data: request, error: requestError } = await supabase
-    .from('employee_profile_update_requests')
+    .from('approval_requests')
     .select('*')
     .eq('id', requestId)
     .eq('organization_id', orgId)
+    .eq('request_type', APPROVAL_REQUEST_TYPE_PROFILE_UPDATE)
+    .eq('source', APPROVAL_REQUEST_SOURCE_ESS_PROFILE_FORM)
     .single()
 
   if (requestError || !request) {
@@ -657,12 +714,12 @@ export async function reviewEmployeeProfileUpdateRequest(
 
   if (decision === 'cancel') {
     const { error: cancelError } = await supabase
-      .from('employee_profile_update_requests')
+      .from('approval_requests')
       .update({
-        status: 'cancelled',
+        status: 'rejected',
         reviewed_by: user.id,
         reviewed_at: new Date().toISOString(),
-        review_comment: reviewComment ?? null,
+        rejection_reason: reviewComment ?? 'Cancelled by reviewer',
       })
       .eq('id', requestId)
       .eq('organization_id', orgId)
@@ -676,18 +733,28 @@ export async function reviewEmployeeProfileUpdateRequest(
     return { success: true }
   }
 
-  const requestedChanges = (request.requested_changes ?? {}) as EmployeeProfileUpdateRequestedChanges
+  const { data: requestItem } = await supabase
+    .from('approval_items')
+    .select('new_value')
+    .eq('request_id', requestId)
+    .eq('item_type', 'FIELD')
+    .eq('field_name', LEGACY_REQUESTED_CHANGES_FIELD)
+    .maybeSingle()
+
+  const requestedChanges =
+    ((requestItem as { new_value?: unknown } | null)?.new_value as EmployeeProfileUpdateRequestedChanges | undefined) ??
+    {}
 
   const nowIso = new Date().toISOString()
 
   if (decision === 'reject') {
     const { error: rejectError } = await supabase
-      .from('employee_profile_update_requests')
+      .from('approval_requests')
       .update({
         status: 'rejected',
         reviewed_by: user.id,
         reviewed_at: nowIso,
-        review_comment: reviewComment ?? null,
+        rejection_reason: reviewComment ?? null,
       })
       .eq('id', requestId)
       .eq('organization_id', orgId)
@@ -771,13 +838,12 @@ export async function reviewEmployeeProfileUpdateRequest(
   }
 
   const { error: approveError } = await supabase
-    .from('employee_profile_update_requests')
+    .from('approval_requests')
     .update({
       status: 'approved',
       reviewed_by: user.id,
       reviewed_at: nowIso,
-      review_comment: reviewComment ?? null,
-      effective_at: nowIso,
+      rejection_reason: null,
     })
     .eq('id', requestId)
     .eq('organization_id', orgId)

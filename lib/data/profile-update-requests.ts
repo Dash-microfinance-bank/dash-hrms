@@ -10,6 +10,8 @@ import {
   type TrainingRecord,
 } from '@/lib/data/employee-profile'
 
+const PROFILE_UPDATE_REQUEST_TYPE = 'PROFILE_UPDATE'
+
 export type ProfileUpdateRequestListRow = {
   id: string
   employee_id: string
@@ -60,11 +62,12 @@ export async function getProfileUpdateRequestsForCurrentOrg(): Promise<
     data: requestsData,
     error: requestsError,
   } = await supabase
-    .from('profile_update_requests')
+    .from('approval_requests')
     .select(
       'id, employee_id, organization_id, status, submitted_at, created_at'
     )
     .eq('organization_id', orgId)
+    .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
     .order('submitted_at', { ascending: false, nullsFirst: false })
 
   if (requestsError) {
@@ -106,7 +109,7 @@ export async function getProfileUpdateRequestsForCurrentOrg(): Promise<
     error: employeesError,
   } = await supabase
     .from('employees')
-    .select('id, organization_id, email, auth_id')
+    .select('id, organization_id, email, auth_id, avatar_url')
     .eq('organization_id', orgId)
     .in('id', employeeIds)
 
@@ -123,14 +126,13 @@ export async function getProfileUpdateRequestsForCurrentOrg(): Promise<
       organization_id: string
       email: string
       auth_id: string | null
+      avatar_url: string | null
     }>
 
   const employeeById = new Map<string, (typeof employees)[number]>()
-  const authIds = new Set<string>()
 
   for (const emp of employees) {
     employeeById.set(emp.id, emp)
-    if (emp.auth_id) authIds.add(emp.auth_id)
   }
 
   // Biodata for names
@@ -165,47 +167,10 @@ export async function getProfileUpdateRequestsForCurrentOrg(): Promise<
     })
   }
 
-  // Avatars from profiles via auth_id
-  let avatarByEmployeeId = new Map<string, string | null>()
-  if (authIds.size > 0) {
-    const {
-      data: profilesData,
-      error: profilesError,
-    } = await supabase
-      .from('profiles')
-      .select('id, avatar_url')
-      .in('id', Array.from(authIds))
-
-    if (profilesError) {
-      console.error(
-        '[ProfileUpdateRequests] Failed to fetch profile avatars:',
-        profilesError
-      )
-    }
-
-    const avatarByProfileId = new Map<string, string | null>()
-    for (const p of (profilesData ?? []) as Array<{
-      id: string
-      avatar_url: string | null
-    }>) {
-      avatarByProfileId.set(p.id, p.avatar_url ?? null)
-    }
-
-    avatarByEmployeeId = new Map<string, string | null>()
-    for (const emp of employees) {
-      if (emp.auth_id) {
-        avatarByEmployeeId.set(
-          emp.id,
-          avatarByProfileId.get(emp.auth_id) ?? null
-        )
-      }
-    }
-  }
-
   return requests.map((req) => {
     const emp = employeeById.get(req.employee_id)
     const bio = biodataByEmployeeId.get(req.employee_id)
-    const avatarUrl = avatarByEmployeeId.get(req.employee_id) ?? null
+    const avatarUrl = emp?.avatar_url ?? null
 
     return {
       id: req.id,
@@ -227,6 +192,8 @@ export async function getProfileUpdateRequestsForCurrentOrg(): Promise<
 export type ProfileUpdateRequestItemRow = {
   id: string
   request_id: string
+  item_type: 'FIELD' | 'DOCUMENT'
+  document_version_id: string | null
   field_name: string
   field_group: string
   old_value: unknown
@@ -289,10 +256,11 @@ export async function getProfileUpdateRequestWithItems(
   const orgId = myProfile.organization_id
 
   const { data: reqData, error: reqError } = await supabase
-    .from('profile_update_requests')
+    .from('approval_requests')
     .select('id, employee_id, organization_id, status, submitted_at, created_at')
     .eq('id', requestId)
     .eq('organization_id', orgId)
+    .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
     .single()
 
   if (reqError || !reqData) return null
@@ -312,13 +280,16 @@ export async function getProfileUpdateRequestWithItems(
     { data: trainingData },
   ] = await Promise.all([
     supabase
-      .from('profile_update_request_items')
-      .select('id, request_id, field_name, field_group, old_value, new_value, status, operation, target_table')
+      .from('approval_items')
+      .select(
+        'id, request_id, item_type, document_version_id, field_name, field_group, old_value, new_value, status, operation, target_table',
+      )
       .eq('request_id', requestId)
+      .eq('item_type', 'FIELD')
       .order('created_at'),
     supabase
       .from('employees')
-      .select('id, email, auth_id')
+      .select('id, email, auth_id, avatar_url')
       .eq('id', employeeId)
       .eq('organization_id', orgId)
       .single(),
@@ -372,18 +343,10 @@ export async function getProfileUpdateRequestWithItems(
   }
 
   const items = (itemsData ?? []) as ProfileUpdateRequestItemRow[]
-  const emp = empData as { email: string; auth_id: string | null } | null
+  const emp = empData as { email: string; auth_id: string | null; avatar_url: string | null } | null
   const bio = biodataData as { firstname: string | null; lastname: string | null } | null
 
-  let avatarUrl: string | null = null
-  if (emp?.auth_id) {
-    const { data: profileRow } = await supabase
-      .from('profiles')
-      .select('avatar_url')
-      .eq('id', emp.auth_id)
-      .single()
-    avatarUrl = (profileRow as { avatar_url: string | null } | null)?.avatar_url ?? null
-  }
+  const avatarUrl = ((empData as { avatar_url?: string | null } | null)?.avatar_url ?? null)
 
   const currentProfile = (await getEmployeeProfileByEmployeeId(employeeId)) ?? {}
 

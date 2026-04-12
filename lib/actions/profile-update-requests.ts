@@ -5,6 +5,9 @@ import { createClient } from '@/lib/supabase/server'
 import { getEmployeeProfileSchema } from '@/lib/data/employee-permissions'
 import { getEssContext, getCurrentEmployeeProfileForEss } from '@/lib/data/employee-profile'
 
+const PROFILE_UPDATE_REQUEST_TYPE = 'PROFILE_UPDATE'
+const PROFILE_UPDATE_REQUEST_SOURCE = 'ESS_PROFILE_FORM'
+
 export type ReviewActionResult = { success: true } | { success: false; error: string }
 
 /** Tables keyed by employee_id: one row per employee. Approval updates these. */
@@ -144,9 +147,10 @@ async function syncProfileUpdateRequestStatus(
   orgId: string
 ): Promise<ReviewActionResult> {
   const { data: items, error: itemsError } = await supabase
-    .from('profile_update_request_items')
+    .from('approval_items')
     .select('status')
     .eq('request_id', requestId)
+    .eq('item_type', 'FIELD')
   if (itemsError) return { success: false, error: itemsError.message }
   const list = (items ?? []) as Array<{ status: string }>
   const pending = list.filter((i) => i.status === 'pending').length
@@ -154,10 +158,11 @@ async function syncProfileUpdateRequestStatus(
   const rejected = list.filter((i) => i.status === 'rejected').length
   const newStatus = deriveRequestStatusFromItemCounts(pending, approved, rejected)
   const { error: updateError } = await supabase
-    .from('profile_update_requests')
+    .from('approval_requests')
     .update({ status: newStatus })
     .eq('id', requestId)
     .eq('organization_id', orgId)
+    .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
   if (updateError) return { success: false, error: updateError.message }
   return { success: true }
 }
@@ -319,10 +324,11 @@ export async function createProfileUpdateRequestFromEss(
 
   // Resolve at most one open request for this employee (most recent)
   const { data: openRequestRows } = await supabase
-    .from('profile_update_requests')
+    .from('approval_requests')
     .select('id, status')
     .eq('employee_id', employeeId)
     .eq('organization_id', orgId)
+    .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
     .in('status', ['pending', 'partially_approved'])
     .order('created_at', { ascending: false })
     .limit(1)
@@ -340,10 +346,11 @@ export async function createProfileUpdateRequestFromEss(
     } else if (existingRequest.status === 'partially_approved') {
       // Only reuse a partially approved request if it still has pending items.
       const { data: pendingForExisting } = await supabase
-        .from('profile_update_request_items')
+        .from('approval_items')
         .select('id')
         .eq('request_id', existingRequest.id)
         .eq('status', 'pending')
+        .eq('item_type', 'FIELD')
         .limit(1)
       const hasPending = (pendingForExisting ?? []).length > 0
       if (hasPending) {
@@ -355,11 +362,12 @@ export async function createProfileUpdateRequestFromEss(
   if (reusableRequestId) {
     // Reuse path: append only new items to the existing request
     const { data: pendingItemsForRequest } = await supabase
-      .from('profile_update_request_items')
+      .from('approval_items')
       .select('field_name')
       .eq('request_id', reusableRequestId)
       .eq('status', 'pending')
       .eq('operation', 'field_update')
+      .eq('item_type', 'FIELD')
 
     const alreadyPendingFields = new Set(
       ((pendingItemsForRequest ?? []) as Array<{ field_name: string }>).map((r) => r.field_name)
@@ -375,6 +383,8 @@ export async function createProfileUpdateRequestFromEss(
       return {
         request_id: reusableRequestId,
         organization_id: orgId,
+        item_type: 'FIELD' as const,
+        document_version_id: null,
         field_name: fieldKey,
         field_group: perm.group_name,
         old_value: oldVal !== undefined ? { value: oldVal } : null,
@@ -389,6 +399,8 @@ export async function createProfileUpdateRequestFromEss(
     const recordItems = recordCreates.map((record) => ({
       request_id: reusableRequestId,
       organization_id: orgId,
+      item_type: 'FIELD' as const,
+      document_version_id: null,
       field_name: `${record.table}.create`,
       field_group: RECORD_CREATE_CONFIG[record.table].fieldGroup,
       old_value: null,
@@ -410,7 +422,7 @@ export async function createProfileUpdateRequestFromEss(
     }
 
     const { error: itemsError } = await supabase
-      .from('profile_update_request_items')
+      .from('approval_items')
       .insert(items)
 
     if (itemsError) {
@@ -437,19 +449,21 @@ export async function createProfileUpdateRequestFromEss(
 
   // New request path: reject if any requested field already has a pending item (any open request)
   const { data: pendingRequests } = await supabase
-    .from('profile_update_requests')
+    .from('approval_requests')
     .select('id')
     .eq('employee_id', employeeId)
     .eq('organization_id', orgId)
+    .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
     .in('status', ['pending', 'partially_approved'])
 
   if (pendingRequests?.length && hasScalarChanges) {
     const reqIds = (pendingRequests as Array<{ id: string }>).map((r) => r.id)
     const { data: pendingItems } = await supabase
-      .from('profile_update_request_items')
+      .from('approval_items')
       .select('field_name')
       .in('request_id', reqIds)
       .eq('status', 'pending')
+      .eq('item_type', 'FIELD')
       .in('field_name', Object.keys(changes))
 
     if (pendingItems?.length) {
@@ -467,8 +481,14 @@ export async function createProfileUpdateRequestFromEss(
   }
 
   const { data: request, error: requestError } = await supabase
-    .from('profile_update_requests')
-    .insert({ employee_id: employeeId, organization_id: orgId, status: 'pending' })
+    .from('approval_requests')
+    .insert({
+      employee_id: employeeId,
+      organization_id: orgId,
+      status: 'pending',
+      request_type: PROFILE_UPDATE_REQUEST_TYPE,
+      source: PROFILE_UPDATE_REQUEST_SOURCE,
+    })
     .select('id')
     .single()
 
@@ -485,6 +505,8 @@ export async function createProfileUpdateRequestFromEss(
         return {
           request_id: requestId,
           organization_id: orgId,
+          item_type: 'FIELD' as const,
+          document_version_id: null,
           field_name: fieldKey,
           field_group: perm.group_name,
           old_value: oldVal !== undefined ? { value: oldVal } : null,
@@ -500,6 +522,8 @@ export async function createProfileUpdateRequestFromEss(
   const recordItems = recordCreates.map((record) => ({
     request_id: requestId,
     organization_id: orgId,
+    item_type: 'FIELD' as const,
+    document_version_id: null,
     field_name: `${record.table}.create`,
     field_group: RECORD_CREATE_CONFIG[record.table].fieldGroup,
     old_value: null,
@@ -513,11 +537,15 @@ export async function createProfileUpdateRequestFromEss(
   const items = [...scalarItems, ...recordItems]
 
   const { error: itemsError } = await supabase
-    .from('profile_update_request_items')
+    .from('approval_items')
     .insert(items)
 
   if (itemsError) {
-    await supabase.from('profile_update_requests').delete().eq('id', requestId)
+    await supabase
+      .from('approval_requests')
+      .delete()
+      .eq('id', requestId)
+      .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
     return { success: false, error: itemsError.message }
   }
 
@@ -544,15 +572,17 @@ export async function approveProfileUpdateItem(itemId: string): Promise<ReviewAc
   if (!orgId) return { success: false, error: 'Not authenticated' }
   const supabase = await createClient()
   const { data: item, error: itemError } = await supabase
-    .from('profile_update_request_items')
+    .from('approval_items')
     .select('id, request_id, operation, field_name, new_value, target_table')
     .eq('id', itemId)
+    .eq('item_type', 'FIELD')
     .single()
   if (itemError || !item) return { success: false, error: 'Item not found' }
   const { data: req } = await supabase
-    .from('profile_update_requests')
+    .from('approval_requests')
     .select('id, employee_id, organization_id')
     .eq('id', (item as { request_id: string }).request_id)
+    .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
     .single()
   if (!req || (req as { organization_id: string }).organization_id !== orgId)
     return { success: false, error: 'Request not found or access denied' }
@@ -565,7 +595,7 @@ export async function approveProfileUpdateItem(itemId: string): Promise<ReviewAc
   )
   if (!applyResult.success) return applyResult
   const { error: updateError } = await supabase
-    .from('profile_update_request_items')
+    .from('approval_items')
     .update({ status: 'approved' })
     .eq('id', itemId)
   if (updateError) return { success: false, error: updateError.message }
@@ -585,20 +615,22 @@ export async function rejectProfileUpdateItem(itemId: string): Promise<ReviewAct
   if (!orgId) return { success: false, error: 'Not authenticated' }
   const supabase = await createClient()
   const { data: item, error: itemError } = await supabase
-    .from('profile_update_request_items')
+    .from('approval_items')
     .select('id, request_id')
     .eq('id', itemId)
+    .eq('item_type', 'FIELD')
     .single()
   if (itemError || !item) return { success: false, error: 'Item not found' }
   const { data: req } = await supabase
-    .from('profile_update_requests')
+    .from('approval_requests')
     .select('id, organization_id')
     .eq('id', (item as { request_id: string }).request_id)
+    .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
     .single()
   if (!req || (req as { organization_id: string }).organization_id !== orgId)
     return { success: false, error: 'Request not found or access denied' }
   const { error: updateError } = await supabase
-    .from('profile_update_request_items')
+    .from('approval_items')
     .update({ status: 'rejected' })
     .eq('id', itemId)
   if (updateError) return { success: false, error: updateError.message }
@@ -617,18 +649,20 @@ export async function approveAllProfileUpdateRequest(requestId: string): Promise
   if (!orgId) return { success: false, error: 'Not authenticated' }
   const supabase = await createClient()
   const { data: req, error: reqError } = await supabase
-    .from('profile_update_requests')
+    .from('approval_requests')
     .select('id, employee_id, organization_id')
     .eq('id', requestId)
+    .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
     .single()
   if (reqError || !req || (req as { organization_id: string }).organization_id !== orgId)
     return { success: false, error: 'Request not found or access denied' }
   const employeeId = (req as { employee_id: string }).employee_id
   const { data: pendingItems, error: itemsError } = await supabase
-    .from('profile_update_request_items')
+    .from('approval_items')
     .select('id, operation, field_name, new_value, target_table')
     .eq('request_id', requestId)
     .eq('status', 'pending')
+    .eq('item_type', 'FIELD')
   if (itemsError) return { success: false, error: itemsError.message }
   const items = (pendingItems ?? []) as Array<ItemForApply & { id: string }>
   if (items.length === 0) {
@@ -642,10 +676,11 @@ export async function approveAllProfileUpdateRequest(requestId: string): Promise
     }
   }
   const { error: updateItemsError } = await supabase
-    .from('profile_update_request_items')
+    .from('approval_items')
     .update({ status: 'approved' })
     .eq('request_id', requestId)
     .in('status', ['pending'])
+    .eq('item_type', 'FIELD')
   if (updateItemsError) return { success: false, error: updateItemsError.message }
   const syncResult = await syncProfileUpdateRequestStatus(supabase, requestId, orgId)
   if (!syncResult.success) return syncResult
@@ -659,26 +694,29 @@ export async function rejectAllProfileUpdateRequest(requestId: string): Promise<
   if (!orgId) return { success: false, error: 'Not authenticated' }
   const supabase = await createClient()
   const { data: req, error: reqError } = await supabase
-    .from('profile_update_requests')
+    .from('approval_requests')
     .select('id, organization_id')
     .eq('id', requestId)
+    .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
     .single()
   if (reqError || !req || (req as { organization_id: string }).organization_id !== orgId)
     return { success: false, error: 'Request not found or access denied' }
   const { data: pendingRows } = await supabase
-    .from('profile_update_request_items')
+    .from('approval_items')
     .select('id')
     .eq('request_id', requestId)
     .eq('status', 'pending')
+    .eq('item_type', 'FIELD')
   const pendingCount = (pendingRows ?? []).length
   if (pendingCount === 0) {
     return { success: false, error: 'No pending items to reject.' }
   }
   const { error: updateItemsError } = await supabase
-    .from('profile_update_request_items')
+    .from('approval_items')
     .update({ status: 'rejected' })
     .eq('request_id', requestId)
     .in('status', ['pending'])
+    .eq('item_type', 'FIELD')
   if (updateItemsError) return { success: false, error: updateItemsError.message }
   const syncResult = await syncProfileUpdateRequestStatus(supabase, requestId, orgId)
   if (!syncResult.success) return syncResult

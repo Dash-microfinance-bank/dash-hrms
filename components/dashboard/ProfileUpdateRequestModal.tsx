@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Dialog,
@@ -11,7 +11,16 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { CheckIcon, Loader2Icon, XIcon } from 'lucide-react'
+import {
+  CheckIcon,
+  DownloadIcon,
+  EyeIcon,
+  FileTextIcon,
+  Loader2Icon,
+  Trash2Icon,
+  UploadIcon,
+  XIcon,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { getProfileUpdateRequestWithItems } from '@/lib/data/profile-update-requests'
 import type {
@@ -27,7 +36,328 @@ import {
 
 const PROFILE_UPDATE_REQUEST_QUERY_KEY = 'profile-update-request'
 
-const TAB_NAMES = ['Personal', 'Contact', 'Finance', 'Career', 'People'] as const
+const TAB_NAMES = ['Personal', 'Contact', 'Finance', 'Documents', 'Career', 'People'] as const
+
+type EmployeeDocumentMock = {
+  id: string
+  documentType: string
+  title: string
+  filename: string
+  format: 'PDF' | 'DOCX' | 'PNG' | 'JPEG' | 'JPG'
+  uploadedAt: string
+  size: string
+  issueDate?: string
+  expiryDate?: string
+}
+
+const PROFILE_REQUIRED_DOCUMENT_TYPES = ['Passport', 'Offer Letter', 'Guarantor Form']
+
+const PROFILE_MOCK_DOCUMENTS: EmployeeDocumentMock[] = [
+  {
+    id: 'pdoc-1',
+    documentType: 'Passport',
+    title: 'International Passport',
+    filename: 'employee_passport.jpg',
+    format: 'JPG',
+    uploadedAt: 'Mar 10, 2026',
+    size: '1.8 MB',
+    issueDate: '2024-05-01',
+    expiryDate: '2034-05-01',
+  },
+  {
+    id: 'pdoc-2',
+    documentType: 'Offer Letter',
+    title: 'Employment Offer Letter',
+    filename: 'offer_letter.pdf',
+    format: 'PDF',
+    uploadedAt: 'Feb 28, 2026',
+    size: '620 KB',
+  },
+]
+
+function DocumentsMockTab() {
+  const [docs, setDocs] = useState<EmployeeDocumentMock[]>(PROFILE_MOCK_DOCUMENTS)
+  const [activeUploadType, setActiveUploadType] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [title, setTitle] = useState('')
+  const [issueDate, setIssueDate] = useState('')
+  const [expiryDate, setExpiryDate] = useState('')
+
+  const previewUrl = useMemo(() => {
+    if (!selectedFile || !selectedFile.type.startsWith('image/')) return null
+    return URL.createObjectURL(selectedFile)
+  }, [selectedFile])
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
+
+  const resetUploadForm = () => {
+    setSelectedFile(null)
+    setTitle('')
+    setIssueDate('')
+    setExpiryDate('')
+  }
+
+  const openUploadForm = (type: string) => {
+    setActiveUploadType(type)
+    resetUploadForm()
+  }
+
+  const closeUploadForm = () => {
+    setActiveUploadType(null)
+    resetUploadForm()
+  }
+
+  const announce = (action: string, doc: EmployeeDocumentMock) => {
+    toast.info(`${action}: ${doc.filename}`)
+  }
+
+  const toSizeLabel = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  const toFormat = (fileName: string): EmployeeDocumentMock['format'] => {
+    const ext = fileName.split('.').pop()?.toUpperCase() ?? ''
+    if (ext === 'PDF') return 'PDF'
+    if (ext === 'DOCX') return 'DOCX'
+    if (ext === 'PNG') return 'PNG'
+    if (ext === 'JPG') return 'JPG'
+    if (ext === 'JPEG') return 'JPEG'
+    return 'PDF'
+  }
+
+  const byType = (() => {
+    const map = new Map<string, { type: string; required: boolean; items: EmployeeDocumentMock[] }>()
+    for (const t of PROFILE_REQUIRED_DOCUMENT_TYPES) map.set(t, { type: t, required: true, items: [] })
+    for (const d of docs) {
+      const current = map.get(d.documentType)
+      if (current) current.items.push(d)
+      else map.set(d.documentType, { type: d.documentType, required: false, items: [d] })
+    }
+    return Array.from(map.values())
+  })()
+
+  const handleAddFile = (type: string) => {
+    if (!selectedFile) return toast.error('Please select a file')
+    if (!title.trim()) return toast.error('Please enter a title')
+
+    const newDoc: EmployeeDocumentMock = {
+      id: `pdoc-${Date.now()}`,
+      documentType: type,
+      title: title.trim(),
+      filename: selectedFile.name,
+      format: toFormat(selectedFile.name),
+      uploadedAt: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      size: toSizeLabel(selectedFile.size),
+      issueDate: issueDate || undefined,
+      expiryDate: expiryDate || undefined,
+    }
+
+    setDocs((prev) => [newDoc, ...prev])
+    toast.success(`Added ${newDoc.filename} to ${type} (mock)`)
+    closeUploadForm()
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border bg-muted/20 px-3 py-2">
+        <p className="text-sm font-medium">Employee Documents</p>
+        <p className="text-xs text-muted-foreground">Supported formats: PDF, DOCX, PNG, JPEG, JPG</p>
+      </div>
+
+      {byType.map(({ type, items, required }) => (
+        <div key={type} className="rounded-lg border bg-card">
+          <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium truncate">{type}</p>
+                {required ? (
+                  <span className="rounded-full border border-amber-400/50 bg-amber-100/50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                    Required
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">{items.length} file{items.length === 1 ? '' : 's'}</p>
+            </div>
+            {/* <Button type="button" variant="outline" size="sm" onClick={() => openUploadForm(type)}>
+              <UploadIcon className="mr-1.5 size-4" />
+              Upload
+            </Button> */}
+          </div>
+
+          <div className="border-t p-3 sm:p-4 space-y-2">
+            {activeUploadType === type ? (
+              <div className="rounded-md border bg-muted/20 p-3 space-y-3">
+                <p className="text-sm font-medium">Add file to {type}</p>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground" htmlFor={`pur-doc-file-${type}`}>
+                    File
+                  </label>
+                  <input
+                    id={`pur-doc-file-${type}`}
+                    type="file"
+                    accept=".pdf,.docx,.png,.jpeg,.jpg"
+                    onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+                  />
+                </div>
+
+                {selectedFile ? (
+                  <div className="rounded-md border bg-background p-2" aria-label="Selected file preview">
+                    {previewUrl ? (
+                      <div className="space-y-2">
+                        <img
+                          src={previewUrl}
+                          alt={`Preview of ${selectedFile.name}`}
+                          className="max-h-40 w-auto rounded border object-contain"
+                        />
+                        <p className="text-xs text-muted-foreground truncate">{selectedFile.name}</p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <FileTextIcon className="size-4 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground truncate">{selectedFile.name}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="space-y-1 sm:col-span-3">
+                    <label className="text-xs text-muted-foreground" htmlFor={`pur-doc-title-${type}`}>
+                      Title
+                    </label>
+                    <input
+                      id={`pur-doc-title-${type}`}
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="e.g. Valid Passport Bio Page"
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground" htmlFor={`pur-doc-issue-${type}`}>
+                      Issue date (optional)
+                    </label>
+                    <input
+                      id={`pur-doc-issue-${type}`}
+                      type="date"
+                      value={issueDate}
+                      onChange={(e) => setIssueDate(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground" htmlFor={`pur-doc-expiry-${type}`}>
+                      Expiry date (optional)
+                    </label>
+                    <input
+                      id={`pur-doc-expiry-${type}`}
+                      type="date"
+                      value={expiryDate}
+                      onChange={(e) => setExpiryDate(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={closeUploadForm}>
+                    Cancel
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => handleAddFile(type)}>
+                    Add file
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {items.length === 0 && required ? (
+              <div className="rounded-md border border-dashed bg-muted/10 p-4 text-center">
+                <p className="text-sm font-medium">No file uploaded yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  This required document type needs at least one uploaded file.
+                </p>
+              </div>
+            ) : null}
+
+            {items.map((doc) => (
+              <div key={doc.id} className="rounded-md border bg-muted/10 p-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+                        {doc.format}
+                      </span> */}
+                      <span className="text-xs text-muted-foreground">
+                        Uploaded {doc.uploadedAt} • {doc.size}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-medium">{doc.title}</span>
+                      {/* <button
+                        type="button"
+                        onClick={() => announce('Previewing document', doc)}
+                        className="w-fit text-left text-sm text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                        aria-label={`Preview ${doc.filename}`}
+                      >
+                        File preview
+                      </button> */}
+                      <button
+                        type="button"
+                        onClick={() => announce('Opening file', doc)}
+                        className="block max-w-full truncate text-left text-sm text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                        aria-label={`Open uploaded filename ${doc.filename}`}
+                        title={doc.filename}
+                      >
+                        {doc.filename}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => announce('Viewing document', doc)}>
+                      <EyeIcon className="mr-1.5 size-4" />
+                      View
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="rounded-full size-6 shrink-0 cursor-pointer"
+                      // disabled={!!acting}
+                      onClick={() => {}}
+                      title="Reject"
+                      >
+                      <XIcon className="size-3" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      className="rounded-full size-6 shrink-0 bg-green-600 hover:bg-green-700 text-white cursor-pointer"
+                      // disabled={!!acting}
+                      onClick={() => {}}
+                      title="Approve"
+                      >
+                      <CheckIcon className="size-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 const PERSONAL_SECTIONS = [
   {
@@ -466,7 +796,7 @@ export default function ProfileUpdateRequestModal({
   }, [data])
 
   const pendingCountByTab = useMemo((): Record<(typeof TAB_NAMES)[number], number> => {
-    const out = { Personal: 0, Contact: 0, Finance: 0, Career: 0, People: 0 }
+    const out = { Personal: 0, Contact: 0, Finance: 0, Documents: 0, Career: 0, People: 0 }
     if (!data) return out
     for (const item of data.items) {
       if (item.status !== 'pending') continue
@@ -650,7 +980,7 @@ export default function ProfileUpdateRequestModal({
         </DialogHeader>
         <section className="px-4">
           <Tabs defaultValue="Personal" className="w-full">
-            <TabsList className="w-full grid grid-cols-5">
+            <TabsList className="w-full grid grid-cols-6">
               {TAB_NAMES.map((name) => {
                 const count = pendingCountByTab[name] ?? 0
                 return (
@@ -700,6 +1030,13 @@ export default function ProfileUpdateRequestModal({
                   </p>
                 ) : (
                   renderSection(FINANCE_SECTIONS)
+                )}
+              </TabsContent>
+              <TabsContent value="Documents" className="mt-4 space-y-4">
+                {!requestId ? (
+                  <p className="text-muted-foreground">Select a request to review.</p>
+                ) : (
+                  <DocumentsMockTab />
                 )}
               </TabsContent>
               <TabsContent value="Career" className="mt-4 space-y-4">

@@ -258,10 +258,11 @@ export async function getPendingFieldsForEmployee(): Promise<string[]> {
   const { supabase, employeeId, orgId } = ctx
 
   const { data: requests } = await supabase
-    .from('profile_update_requests')
+    .from('approval_requests')
     .select('id')
     .eq('employee_id', employeeId)
     .eq('organization_id', orgId)
+    .eq('request_type', 'PROFILE_UPDATE')
     .in('status', ['pending', 'partially_approved'])
 
   if (!requests?.length) return []
@@ -269,10 +270,11 @@ export async function getPendingFieldsForEmployee(): Promise<string[]> {
   const requestIds = (requests as Array<{ id: string }>).map((r) => r.id)
 
   const { data: items } = await supabase
-    .from('profile_update_request_items')
+    .from('approval_items')
     .select('field_name')
     .in('request_id', requestIds)
     .eq('status', 'pending')
+    .eq('item_type', 'FIELD')
 
   return ((items ?? []) as Array<{ field_name: string }>).map((i) => i.field_name)
 }
@@ -397,9 +399,11 @@ export async function getEmployeeCollectionsForEss(): Promise<EmployeeCollection
       .eq('organization_id', orgId)
       .order('created_at'),
     supabase
-      .from('profile_update_requests')
+      .from('approval_requests')
       .select('id')
       .eq('employee_id', employeeId)
+      .eq('organization_id', orgId)
+      .eq('request_type', 'PROFILE_UPDATE')
       .in('status', ['pending', 'partially_approved']),
   ])
 
@@ -408,11 +412,12 @@ export async function getEmployeeCollectionsForEss(): Promise<EmployeeCollection
   if (pendingRequests?.length) {
     const requestIds = (pendingRequests as Array<{ id: string }>).map((row) => row.id)
     const { data: pendingItems } = await supabase
-      .from('profile_update_request_items')
+      .from('approval_items')
       .select('id, request_id, target_table, field_group, new_value, created_at')
       .in('request_id', requestIds)
       .eq('status', 'pending')
       .eq('operation', 'create_record')
+      .eq('item_type', 'FIELD')
 
     pendingRecordCreates = ((pendingItems ?? []) as Array<{
       id: string

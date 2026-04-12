@@ -58,12 +58,16 @@ async function getAdminContext() {
   }
 }
 
+type DocumentTypeOwnerType = 'USER' | 'ORGANIZATION' | 'DEPARTMENT'
+
 /** Create an organization-scoped document type. Name must be unique within the organization. */
 export async function createDocumentType(params: {
   name: string
   document_category_id: string
+  owner_type: DocumentTypeOwnerType
   is_required: boolean
   approval_required: boolean
+  allow_multiple: boolean
 }): Promise<DocumentTypeActionResult> {
   const ctx = await getAdminContext()
   if ('error' in ctx) return { success: false, error: ctx.error }
@@ -97,13 +101,17 @@ export async function createDocumentType(params: {
     return { success: false, error: 'A document type with this name already exists in your organization.' }
   }
 
+  const isOrganizationLevel = params.owner_type === 'ORGANIZATION'
+
   const { error } = await supabase.from('document_types').insert({
     organization_id: orgId,
     name: trimmed,
     // DB columns: category_id / required / required_approval
     category_id: params.document_category_id,
-    required: params.is_required,
-    requires_approval: params.approval_required,
+    owner_type: params.owner_type,
+    required: isOrganizationLevel ? false : params.is_required,
+    requires_approval: isOrganizationLevel ? false : params.approval_required,
+    allow_multiple: params.allow_multiple,
   })
 
   if (error) return { success: false, error: error.message }
@@ -120,6 +128,7 @@ export async function updateDocumentType(
     document_category_id: string
     is_required: boolean
     approval_required: boolean
+    allow_multiple: boolean
   }
 ): Promise<DocumentTypeActionResult> {
   const ctx = await getAdminContext()
@@ -175,6 +184,7 @@ export async function updateDocumentType(
       category_id: params.document_category_id,
       required: params.is_required,
       requires_approval: params.approval_required,
+      allow_multiple: params.allow_multiple,
     })
     .eq('id', id)
     .eq('organization_id', orgId)

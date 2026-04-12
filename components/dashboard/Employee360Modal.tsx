@@ -8,6 +8,7 @@ import {
   ChevronDownIcon,
   ClockIcon,
   CreditCardIcon,
+  FileTextIcon,
   GraduationCapIcon,
   Loader2Icon,
   PencilIcon,
@@ -28,6 +29,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { EmployeeAvatarPicker } from '@/components/dashboard/EmployeeAvatarPicker'
+import { EmployeeDocumentsTab } from '@/components/dashboard/EmployeeDocumentsTab'
 import type {
   ChangeEvent,
   Employee360Response,
@@ -2517,6 +2520,7 @@ const TABS = [
   { value: 'people', label: 'People', Icon: UsersIcon },
   { value: 'career', label: 'Career', Icon: GraduationCapIcon },
   { value: 'finance', label: 'Finance', Icon: CreditCardIcon },
+  { value: 'documents', label: 'Documents', Icon: FileTextIcon },
   { value: 'activity', label: 'Activity', Icon: ClockIcon },
 ]
 
@@ -2535,6 +2539,9 @@ export function Employee360Modal({
   const [data, setData] = useState<Employee360Response | null>(null)
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  // Optimistic avatar URL: set immediately on upload confirm so the header
+  // stays in sync before the next fetchData() round-trip completes.
+  const [optimisticAvatarUrl, setOptimisticAvatarUrl] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     if (!employeeId) return
@@ -2558,6 +2565,7 @@ export function Employee360Modal({
     } else if (!open) {
       setData(null)
       setFetchError(null)
+      setOptimisticAvatarUrl(null)
     }
   }, [open, employeeId, fetchData])
 
@@ -2588,12 +2596,25 @@ export function Employee360Modal({
           {/* ── Fixed header ─────────────────────────────────────────────── */}
           <div className="shrink-0 border-b px-5 pt-4 pb-0">
             <div className="flex items-center gap-3 pb-3">
-              <Avatar className="size-11 shrink-0">
-                {data?.employee.avatar_url ? (
-                  <AvatarImage src={data.employee.avatar_url} alt={employeeName || 'Employee avatar'} />
-                ) : null}
-                <AvatarFallback className="text-sm font-semibold bg-muted">{initials}</AvatarFallback>
-              </Avatar>
+              <EmployeeAvatarPicker
+                avatarUrl={optimisticAvatarUrl ?? data?.employee.avatar_url ?? null}
+                initials={initials}
+                employeeName={employeeName}
+                employeeId={employeeId!}
+                isAwaitingEmployeeData={loading && !data}
+                onAvatarCommitted={(url) => {
+                  // Immediately reflect the new avatar in the modal header without
+                  // waiting for a full fetchData() round-trip.
+                  setOptimisticAvatarUrl(url)
+                  // Patch the in-memory data so other parts of the modal that
+                  // read data.employee.avatar_url also stay consistent.
+                  setData((prev) =>
+                    prev
+                      ? { ...prev, employee: { ...prev.employee, avatar_url: url } }
+                      : prev,
+                  )
+                }}
+              />
               <div className="min-w-0 flex-1">
                 <DialogTitle className="text-base font-semibold truncate">
                   {loading && !data ? 'Loading…' : employeeName || '—'}
@@ -2661,7 +2682,7 @@ export function Employee360Modal({
                   />
                   <ContractCard employeeId={employeeId!} employee={data.employee} historyByField={historyByField} onSaveSuccess={onSaveSuccess} />
                 </TabsContent>
-
+                
                 <TabsContent value="people" className="mt-0 p-4 space-y-4">
                   <NextOfKinSection employeeId={employeeId!} records={data.nextOfKin} onSaveSuccess={onSaveSuccess} />
                   <PersonListSection employeeId={employeeId!} table="employee_family" title="Family Members" records={data.family} onSaveSuccess={onSaveSuccess} maxRecords={3} />
@@ -2675,7 +2696,15 @@ export function Employee360Modal({
                 </TabsContent>
 
                 <TabsContent value="finance" className="mt-0 p-4 space-y-4">
-                  <BankDetailsCard employeeId={employeeId!} bankDetails={data.bankDetails} onSaveSuccess={onSaveSuccess} />
+                  <BankDetailsCard
+                    employeeId={employeeId!}
+                    bankDetails={data.bankDetails}
+                    onSaveSuccess={onSaveSuccess}
+                  />
+                </TabsContent>
+
+                <TabsContent value="documents" className="mt-0 p-4">
+                  <EmployeeDocumentsTab employeeId={employeeId!} />
                 </TabsContent>
 
                 <TabsContent value="activity" className="mt-0 p-4">

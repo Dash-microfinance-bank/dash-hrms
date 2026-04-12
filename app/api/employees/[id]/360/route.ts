@@ -159,6 +159,7 @@ type EmployeeRowFor360 = {
   manager_id: string | null
   report_location: string | null
   auth_id: string | null
+  avatar_url: string | null
 }
 
 export interface Employee360Response {
@@ -218,7 +219,7 @@ export async function GET(
       supabase
         .from('employees')
         .select(
-          'id, organization_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id, report_location, auth_id'
+          'id, organization_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id, report_location, auth_id, avatar_url'
         )
         .eq('id', employeeId)
         .eq('organization_id', orgId)
@@ -304,7 +305,7 @@ export async function GET(
     const emp = empResult.data as EmployeeRowFor360
 
     // ── Enrich: department, job role, location, avatar ────────────────────────
-    const [deptResult, roleResult, locationResult, avatarResult] = await Promise.all([
+    const [deptResult, roleResult, locationResult] = await Promise.all([
       emp.department_id
         ? supabase.from('departments').select('name, code').eq('id', emp.department_id).single()
         : Promise.resolve({ data: null, error: null }),
@@ -314,20 +315,12 @@ export async function GET(
       emp.report_location
         ? supabase.from('organization_location').select('address').eq('id', emp.report_location).single()
         : Promise.resolve({ data: null, error: null }),
-      emp.auth_id
-        ? supabase
-            .from('profiles')
-            .select('avatar_url')
-            .eq('id', emp.auth_id)
-            .maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
     ])
 
     const dept = deptResult.data as { name: string; code: string | null } | null
     const role = roleResult.data as { title: string; code: string | null } | null
     const location = locationResult.data as { address: string | null } | null
-    const avatarProfile = avatarResult.data as { avatar_url: string | null } | null
-    const avatarUrl = avatarProfile?.avatar_url ?? null
+    const avatarUrl = (emp.avatar_url ?? null) as string | null
 
     // Manager name from that manager's employee_biodata (not profiles)
     let managerName: string | null = null
