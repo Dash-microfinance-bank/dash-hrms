@@ -139,7 +139,7 @@ const Navbar = () => {
                         >
                             <div className='bg-white py-4 space-y-0 shadow-lg rounded-lg border border-gray-100'>
                                 {/* <li><Link href={"/team"} className='block py-3 px-5 transition-smooth hover:bg-slate-100 rounded-lg hover:translate-x-1' role="menuitem">Team</Link></li> */}
-                                <li><Link href={"/"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Documents</Link></li>
+                                {/* <li><Link href={"/"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Documents</Link></li> */}
                                 <li><Link href={"/"} className='block py-3 px-5 transition-smooth hover:bg-slate-100' role="menuitem">Organogram</Link></li>
                             </div>
                         </ul>

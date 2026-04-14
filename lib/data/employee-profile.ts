@@ -338,6 +338,8 @@ export type PendingRecordCreate = {
 }
 
 export type EmployeeCollectionsForEss = {
+  /** The current ESS user's employee row id — used to scope API calls. */
+  employeeId: string
   family: PersonRecord[]
   dependants: PersonRecord[]
   nextOfKin: NextOfKinRecord[]
@@ -439,6 +441,7 @@ export async function getEmployeeCollectionsForEss(): Promise<EmployeeCollection
   }
 
   return {
+    employeeId,
     family: (family ?? []) as PersonRecord[],
     dependants: (dependants ?? []) as PersonRecord[],
     nextOfKin: (nextOfKin ?? []) as NextOfKinRecord[],

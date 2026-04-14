@@ -37,11 +37,37 @@ export type DocumentVersionCard = {
   expiryDate: string | null
 }
 
+/**
+ * A document that has been submitted for HR approval but whose `documents` /
+ * `document_versions` rows have not yet been created.  The file already exists
+ * in Supabase Storage; all metadata is sourced from `approval_items.new_value`.
+ */
+export type PendingDocumentItem = {
+  /** approval_items.id — stable key for React lists. */
+  approvalItemId: string
+  requestId: string
+  documentTypeId: string
+  title: string
+  fileName: string | null
+  fileSize: number | null
+  fileType: string | null
+  /** Public URL already in storage (available for preview). */
+  fileUrl: string | null
+  issueDate: string | null
+  expiryDate: string | null
+  uploadedAt: string | null
+}
+
 /** Full payload returned to the API route and forwarded to the client. */
 export type EmployeeDocumentsTabPayload = {
   documentTypes: DocumentTypeTabItem[]
   /** Flat list of all current-version cards; client groups by `documentTypeId`. */
   versionCards: DocumentVersionCard[]
+  /**
+   * Pending document approval items — submitted but awaiting HR review.
+   * These have no `documents` / `document_versions` rows yet.
+   */
+  pendingDocumentItems: PendingDocumentItem[]
 }
 
 // ─── Raw DB row shapes ────────────────────────────────────────────────────────
@@ -134,76 +160,174 @@ export async function getEmployeeDocumentsTabData(
     allow_multiple: t.allow_multiple ?? false,
   }))
 
-  if (typeIds.length === 0) {
-    return { documentTypes, versionCards: [] }
-  }
-
-  // Fetch documents owned by this employee for the above type ids.
-  const { data: rawDocs, error: docsError } = await supabase
-    .from('documents')
-    .select('id, document_type_id, title, issue_date, expiry_date, current_version_id')
-    .eq('employee_id', employeeId)
-    .eq('organization_id', orgId)
-    .in('document_type_id', typeIds)
-
-  if (docsError) {
-    console.error('[employee-documents-tab] Failed to fetch documents:', docsError)
-    return { documentTypes, versionCards: [] }
-  }
-
-  const docs = (rawDocs ?? []) as RawDocument[]
-
-  // Collect the current version ids that are actually set.
-  const currentVersionIds = docs
-    .map((d) => d.current_version_id)
-    .filter((id): id is string => !!id)
-
-  if (currentVersionIds.length === 0) {
-    return { documentTypes, versionCards: [] }
-  }
-
-  // Fetch the current versions in one query.
-  const { data: rawVersions, error: versionsError } = await supabase
-    .from('document_versions')
-    .select('id, document_id, file_name, file_type, file_size, file_url, storage_object_path, uploaded_at')
-    .in('id', currentVersionIds)
-
-  if (versionsError) {
-    console.error('[employee-documents-tab] Failed to fetch versions:', versionsError)
-    return { documentTypes, versionCards: [] }
-  }
-
-  const versions = (rawVersions ?? []) as RawDocumentVersion[]
-
-  // Index versions and documents for O(1) lookups.
-  const versionById = new Map(versions.map((v) => [v.id, v]))
-  const docById = new Map(docs.map((d) => [d.id, d]))
-
+  // Build approved version cards (skip entirely when there are no types)
   const versionCards: DocumentVersionCard[] = []
 
-  for (const doc of docs) {
-    if (!doc.current_version_id) continue
-    const ver = versionById.get(doc.current_version_id)
-    if (!ver) continue
+  if (typeIds.length > 0) {
+    const { data: rawDocs, error: docsError } = await supabase
+      .from('documents')
+      .select('id, document_type_id, title, issue_date, expiry_date, current_version_id')
+      .eq('employee_id', employeeId)
+      .eq('organization_id', orgId)
+      .in('document_type_id', typeIds)
 
-    versionCards.push({
-      versionId: ver.id,
-      documentId: doc.id,
-      documentTypeId: doc.document_type_id,
-      title: doc.title,
-      fileName: ver.file_name,
-      fileType: ver.file_type,
-      fileSize: ver.file_size,
-      fileUrl: ver.file_url,
-      storageObjectPath: ver.storage_object_path,
-      uploadedAt: ver.uploaded_at,
-      issueDate: doc.issue_date,
-      expiryDate: doc.expiry_date,
-    })
+    if (docsError) {
+      console.error('[employee-documents-tab] Failed to fetch documents:', docsError)
+      // Fall through with empty versionCards; pending items query still runs below.
+    } else {
+      const docs = (rawDocs ?? []) as RawDocument[]
+      const currentVersionIds = docs
+        .map((d) => d.current_version_id)
+        .filter((id): id is string => !!id)
+
+      if (currentVersionIds.length > 0) {
+        const { data: rawVersions, error: versionsError } = await supabase
+          .from('document_versions')
+          .select('id, document_id, file_name, file_type, file_size, file_url, storage_object_path, uploaded_at')
+          .in('id', currentVersionIds)
+
+        if (versionsError) {
+          console.error('[employee-documents-tab] Failed to fetch versions:', versionsError)
+          // Fall through with empty versionCards.
+        } else {
+          const versions = (rawVersions ?? []) as RawDocumentVersion[]
+          const versionById = new Map(versions.map((v) => [v.id, v]))
+
+          for (const doc of docs) {
+            if (!doc.current_version_id) continue
+            const ver = versionById.get(doc.current_version_id)
+            if (!ver) continue
+
+            versionCards.push({
+              versionId: ver.id,
+              documentId: doc.id,
+              documentTypeId: doc.document_type_id,
+              title: doc.title,
+              fileName: ver.file_name,
+              fileType: ver.file_type,
+              fileSize: ver.file_size,
+              fileUrl: ver.file_url,
+              storageObjectPath: ver.storage_object_path,
+              uploadedAt: ver.uploaded_at,
+              issueDate: doc.issue_date,
+              expiryDate: doc.expiry_date,
+            })
+          }
+        }
+      }
+    }
   }
 
-  // Suppress unused variable warning — docById is available for future use.
-  void docById
+  // ── Pending document approval items ────────────────────────────────────────
+  // When an employee submits documents via the ESS profile-update form, we
+  // immediately insert document_versions (status = 'pending') + a documents
+  // row where needed, then create an approval_items row that references the
+  // version via document_version_id.
+  //
+  // We read the real document_versions row here for accuracy — no need to parse
+  // the JSON snapshot in new_value.
+  const pendingDocumentItems: PendingDocumentItem[] = []
 
-  return { documentTypes, versionCards }
+  const { data: openRequests } = await supabase
+    .from('approval_requests')
+    .select('id')
+    .eq('employee_id', employeeId)
+    .eq('organization_id', orgId)
+    .eq('request_type', 'PROFILE_UPDATE')
+    .in('status', ['pending', 'partially_approved'])
+
+  const openRequestIds = ((openRequests ?? []) as Array<{ id: string }>).map((r) => r.id)
+
+  if (openRequestIds.length > 0) {
+    // Three flat queries joined in-memory — avoids PostgREST nested-embed
+    // ambiguity when traversing approval_items → document_versions → documents.
+
+    // 1. Pending DOCUMENT items that have a linked version.
+    const { data: rawItems } = await supabase
+      .from('approval_items')
+      .select('id, request_id, document_version_id')
+      .in('request_id', openRequestIds)
+      .eq('item_type', 'DOCUMENT')
+      .eq('status', 'pending')
+      .not('document_version_id', 'is', null)
+
+    type RawApprovalItem = {
+      id: string
+      request_id: string
+      document_version_id: string
+    }
+
+    const items = (rawItems ?? []) as RawApprovalItem[]
+    if (items.length === 0) {
+      return { documentTypes, versionCards, pendingDocumentItems }
+    }
+
+    const versionIds = items.map((i) => i.document_version_id)
+
+    // 2. The document_versions rows for those items.
+    const { data: rawVersions } = await supabase
+      .from('document_versions')
+      .select('id, document_id, file_name, file_size, file_type, file_url, uploaded_at')
+      .in('id', versionIds)
+
+    type RawPendingVersion = {
+      id: string
+      document_id: string
+      file_name: string | null
+      file_size: number | null
+      file_type: string | null
+      file_url: string | null
+      uploaded_at: string
+    }
+
+    const versionById = new Map(
+      ((rawVersions ?? []) as RawPendingVersion[]).map((v) => [v.id, v]),
+    )
+
+    const documentIds = [...new Set(
+      ((rawVersions ?? []) as RawPendingVersion[]).map((v) => v.document_id),
+    )]
+
+    // 3. The parent documents rows.
+    const { data: rawDocs } = await supabase
+      .from('documents')
+      .select('id, title, document_type_id, issue_date, expiry_date')
+      .in('id', documentIds)
+
+    type RawPendingDoc = {
+      id: string
+      title: string
+      document_type_id: string
+      issue_date: string | null
+      expiry_date: string | null
+    }
+
+    const docById = new Map(
+      ((rawDocs ?? []) as RawPendingDoc[]).map((d) => [d.id, d]),
+    )
+
+    // Join in-memory and build the result list.
+    for (const item of items) {
+      const ver = versionById.get(item.document_version_id)
+      if (!ver) continue
+      const doc = docById.get(ver.document_id)
+      if (!doc) continue
+
+      pendingDocumentItems.push({
+        approvalItemId: item.id,
+        requestId: item.request_id,
+        documentTypeId: doc.document_type_id,
+        title: doc.title,
+        fileName: ver.file_name,
+        fileSize: ver.file_size,
+        fileType: ver.file_type,
+        fileUrl: ver.file_url,
+        issueDate: doc.issue_date,
+        expiryDate: doc.expiry_date,
+        uploadedAt: ver.uploaded_at,
+      })
+    }
+  }
+
+  return { documentTypes, versionCards, pendingDocumentItems }
 }

@@ -5,6 +5,7 @@ import type {
   EmployeeDocumentsTabPayload,
   DocumentTypeTabItem,
   DocumentVersionCard,
+  PendingDocumentItem,
 } from '@/lib/data/employee-documents-tab'
 
 export const runtime = 'nodejs'
@@ -12,7 +13,7 @@ export const runtime = 'nodejs'
 // ─── Response types (re-exported so client components can import them) ────────
 
 export type EmployeeDocumentsResponse = EmployeeDocumentsTabPayload
-export type { DocumentTypeTabItem, DocumentVersionCard }
+export type { DocumentTypeTabItem, DocumentVersionCard, PendingDocumentItem }
 
 // ─── GET /api/employees/[id]/documents ───────────────────────────────────────
 
