@@ -11,19 +11,20 @@ export function formatEmployeeName(emp: EmployeeRow): string {
 
 export function toLineManagerOptions(employees: EmployeeRow[]): LineManagerOption[] {
   return employees
-    .filter((emp) => emp.auth_id != null && emp.auth_id !== '')
+    .filter((emp) => Boolean(emp.auth_id) && emp.active === true)
     .map((emp) => {
-    const name = formatEmployeeName(emp)
-    const jobRoleDisplay =
-      emp.job_role_title && emp.job_role_code?.trim()
-        ? `${emp.job_role_title} (${emp.job_role_code.trim()})`
-        : emp.job_role_title ?? '—'
-    return {
-      id: emp.auth_id ?? '',
-      employeeId: emp.id,
-      name,
-      jobRoleDisplay,
-      avatarUrl: emp.avatar_url ?? null,
-    }
-  })
+      const name = formatEmployeeName(emp)
+      const jobRoleDisplay =
+        emp.job_role_title && emp.job_role_code?.trim()
+          ? `${emp.job_role_title} (${emp.job_role_code.trim()})`
+          : emp.job_role_title ?? '—'
+      return {
+        // id is now the employee row id (employees.id) — stored as employees.manager_id
+        id: emp.id,
+        employeeId: emp.id,
+        name,
+        jobRoleDisplay,
+        avatarUrl: emp.avatar_url ?? null,
+      }
+    })
 }

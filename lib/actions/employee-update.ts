@@ -55,9 +55,10 @@ const CARD_FIELDS: Record<string, CardDef> = {
     table: 'employee_bank_details',
     fields: ['bank_name', 'account_name', 'account_number', 'account_type', 'bvn', 'nin', 'pfa', 'rsa_pin', 'tax_id', 'nhf_id'],
   },
+  // manager_id intentionally excluded — handled via assignLineManager
   role: {
     table: 'employees',
-    fields: ['department_id', 'job_role_id', 'manager_id', 'report_location'],
+    fields: ['department_id', 'job_role_id', 'report_location'],
   },
   contract: {
     table: 'employees',
@@ -194,6 +195,238 @@ async function insertChangeEvents(
   }))
 }
 
+// ─── Circular-report guard ────────────────────────────────────────────────────
+
+/**
+ * Returns true if assigning `candidateManagerId` as manager of `employeeId`
+ * would create a cycle (A → B → C → A).
+ *
+ * Walks UP the existing manager chain from `candidateManagerId`. If we
+ * encounter `employeeId` before reaching a root, a cycle would be created.
+ */
+function wouldCreateCycle(
+  employeeId: string,
+  candidateManagerId: string,
+  allEmployees: Array<{ id: string; manager_id: string | null }>
+): boolean {
+  const visited = new Set<string>()
+  let current: string | null = candidateManagerId
+
+  while (current !== null) {
+    if (current === employeeId) return true
+    if (visited.has(current)) break // guard against existing cycles in data
+    visited.add(current)
+    const emp = allEmployees.find((e) => e.id === current)
+    current = emp?.manager_id ?? null
+  }
+
+  return false
+}
+
+// ─── assignLineManager ────────────────────────────────────────────────────────
+
+/**
+ * Assign or clear a direct line manager for an employee.
+ *
+ * Enforces:
+ *   - Multi-tenancy: both employee and manager must belong to the caller's org.
+ *   - Self-reporting: an employee cannot be their own manager.
+ *   - Circular reporting: A → B → C → A is rejected before any DB write.
+ *
+ * History rules (employee_reporting_lines):
+ *   - No prior active row → insert active row (effective_to = NULL).
+ *   - Existing active row → close it (effective_to = now()), insert new active row.
+ *
+ * Role sync (user_roles):
+ *   - Old manager with zero remaining direct reports → remove 'manager' role.
+ *   - New manager without 'manager' role → add it.
+ */
+export async function assignLineManager(
+  employeeId: string,
+  newManagerId: string | null
+): Promise<UpdateCardResult> {
+  const ctx = await getContext()
+  if ('error' in ctx) return { success: false, error: ctx.error as string }
+  const { supabase, user, orgId } = ctx
+
+  // ── Verify employee belongs to org ──────────────────────────────────────────
+  const { data: empRow } = await supabase
+    .from('employees')
+    .select('id, manager_id')
+    .eq('id', employeeId)
+    .eq('organization_id', orgId)
+    .single()
+
+  if (!empRow) return { success: false, error: 'Employee not found' }
+
+  const oldManagerId = (empRow.manager_id as string | null) ?? null
+
+  // ── No-op guard ──────────────────────────────────────────────────────────────
+  if (newManagerId === oldManagerId) {
+    return { success: true, updatedFields: {}, newEvents: [] }
+  }
+
+  // ── Validate new manager ─────────────────────────────────────────────────────
+  if (newManagerId) {
+    // Must belong to same org
+    const { data: mgrRow } = await supabase
+      .from('employees')
+      .select('id, active, auth_id')
+      .eq('id', newManagerId)
+      .eq('organization_id', orgId)
+      .single()
+
+    if (!mgrRow) {
+      return {
+        success: false,
+        error: 'The selected line manager does not exist in your organisation.',
+      }
+    }
+    if ((mgrRow as { active: boolean }).active !== true) {
+      return { success: false, error: 'Line manager must be an active employee.' }
+    }
+    if (!(mgrRow as { auth_id: string | null }).auth_id) {
+      return { success: false, error: 'Line manager must have an active login account.' }
+    }
+
+    // Self-reporting check
+    if (newManagerId === employeeId) {
+      return {
+        success: false,
+        error: 'An employee cannot report to themselves.',
+      }
+    }
+
+    // Circular-reporting check — fetch whole active-manager graph for the org
+    const { data: allEmp } = await supabase
+      .from('employees')
+      .select('id, manager_id')
+      .eq('organization_id', orgId)
+      .eq('active', true)
+
+    const graph = (allEmp ?? []) as Array<{ id: string; manager_id: string | null }>
+    if (wouldCreateCycle(employeeId, newManagerId, graph)) {
+      return {
+        success: false,
+        error:
+          'This assignment would create a circular reporting chain (e.g. A → B → C → A). Please choose a different manager.',
+      }
+    }
+  }
+
+  // ── Close existing active reporting-line row (if any) ────────────────────────
+  const { data: activeRow } = await supabase
+    .from('employee_reporting_lines')
+    .select('id')
+    .eq('employee_id', employeeId)
+    .is('effective_to', null)
+    .maybeSingle()
+
+  if (activeRow) {
+    const { error: closeErr } = await supabase
+      .from('employee_reporting_lines')
+      .update({ effective_to: new Date().toISOString() })
+      .eq('id', (activeRow as { id: string }).id)
+      .eq('organization_id', orgId)
+
+    if (closeErr) {
+      return { success: false, error: `Failed to close reporting line: ${closeErr.message}` }
+    }
+  }
+
+  // ── Insert new active reporting-line row (if manager is being set) ───────────
+  if (newManagerId) {
+    const { error: insertErr } = await supabase.from('employee_reporting_lines').insert({
+      organization_id: orgId,
+      employee_id: employeeId,
+      manager_id: newManagerId,
+      effective_from: new Date().toISOString(),
+      effective_to: null,
+    })
+
+    if (insertErr) {
+      return { success: false, error: `Failed to create reporting line: ${insertErr.message}` }
+    }
+  }
+
+  // ── Sync denormalised employees.manager_id ───────────────────────────────────
+  const { error: syncErr } = await supabase
+    .from('employees')
+    .update({ manager_id: newManagerId })
+    .eq('id', employeeId)
+    .eq('organization_id', orgId)
+
+  if (syncErr) {
+    return { success: false, error: `Failed to sync manager: ${syncErr.message}` }
+  }
+
+  // ── Emit change event ────────────────────────────────────────────────────────
+  const newEvents = await insertChangeEvents(supabase, orgId, employeeId, user.id, 'employees', [
+    { field: 'manager_id', oldVal: oldManagerId, newVal: newManagerId },
+  ])
+
+  // ── Role sync ────────────────────────────────────────────────────────────────
+  // Remove 'manager' role from old manager if they now have zero direct reports
+  if (oldManagerId) {
+    const { count: remaining } = await supabase
+      .from('employees')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
+      .eq('manager_id', oldManagerId)
+      .eq('active', true)
+
+    if ((remaining ?? 0) === 0) {
+      // Fetch the auth_id of the old manager to look up their user_roles entry
+      const { data: oldMgrEmp } = await supabase
+        .from('employees')
+        .select('auth_id')
+        .eq('id', oldManagerId)
+        .single()
+
+      const oldMgrAuthId = (oldMgrEmp as { auth_id: string | null } | null)?.auth_id
+      if (oldMgrAuthId) {
+        await supabase
+          .from('user_roles')
+          .delete()
+          .eq('user_id', oldMgrAuthId)
+          .eq('role', 'manager')
+          .eq('organization_id', orgId)
+      }
+    }
+  }
+
+  // Add 'manager' role to new manager if they don't already have it
+  if (newManagerId) {
+    const { data: newMgrEmp } = await supabase
+      .from('employees')
+      .select('auth_id')
+      .eq('id', newManagerId)
+      .single()
+
+    const newMgrAuthId = (newMgrEmp as { auth_id: string | null } | null)?.auth_id
+    if (newMgrAuthId) {
+      const { data: existingRole } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('user_id', newMgrAuthId)
+        .eq('role', 'manager')
+        .eq('organization_id', orgId)
+        .maybeSingle()
+
+      if (!existingRole) {
+        await supabase.from('user_roles').insert({
+          user_id: newMgrAuthId,
+          role: 'manager',
+          organization_id: orgId,
+        })
+      }
+    }
+  }
+
+  revalidatePath('/dashboard/admin/employees')
+  return { success: true, updatedFields: { manager_id: newManagerId }, newEvents }
+}
+
 // ─── updateEmployeeCard ───────────────────────────────────────────────────────
 
 export async function updateEmployeeCard(
@@ -252,6 +485,43 @@ export async function updateEmployeeCard(
         const { error } = await supabase.from('employee_biodata').update(upd).eq('employee_id', employeeId).eq('organization_id', orgId)
         if (error) return { success: false, error: error.message }
         const evts = await insertChangeEvents(supabase, orgId, employeeId, user.id, 'employee_biodata', bioChanges)
+        allNewEvents.push(...evts)
+        Object.assign(mergedUpdated, upd)
+      }
+    }
+
+    revalidatePath('/dashboard/admin/employees')
+    return { success: true, updatedFields: mergedUpdated, newEvents: allNewEvents }
+  }
+
+  // ── Role card — handle manager_id via assignLineManager, rest direct ──────────
+  if (card === 'role') {
+    // Delegate manager_id through the full history + validation flow
+    if ('manager_id' in payload) {
+      const incomingManagerId = (payload.manager_id as string | null) || null
+      const result = await assignLineManager(employeeId, incomingManagerId)
+      if (!result.success) return result
+      allNewEvents.push(...result.newEvents)
+      if (result.updatedFields.manager_id !== undefined) {
+        mergedUpdated.manager_id = result.updatedFields.manager_id
+      }
+    }
+
+    // Handle the remaining role fields (department_id, job_role_id, report_location) directly
+    const roleDef = CARD_FIELDS['role']
+    const rolePayload: Record<string, unknown> = {}
+    for (const f of roleDef.fields) if (f in payload) rolePayload[f] = payload[f]
+
+    if (Object.keys(rolePayload).length > 0) {
+      const { data: cur } = await supabase.from('employees').select(roleDef.fields.join(', ')).eq('id', employeeId).single()
+      const curRec = (cur ?? {}) as Record<string, unknown>
+      const changes = diff(curRec, rolePayload, roleDef.fields)
+      if (changes.length > 0) {
+        const upd: Record<string, unknown> = {}
+        for (const c of changes) upd[c.field] = c.newVal
+        const { error } = await supabase.from('employees').update(upd).eq('id', employeeId).eq('organization_id', orgId)
+        if (error) return { success: false, error: error.message }
+        const evts = await insertChangeEvents(supabase, orgId, employeeId, user.id, 'employees', changes)
         allNewEvents.push(...evts)
         Object.assign(mergedUpdated, upd)
       }

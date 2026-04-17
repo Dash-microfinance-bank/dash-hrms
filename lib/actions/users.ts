@@ -426,15 +426,12 @@ async function getEmployeeLinkInfo(
     return { employeeId: null, hasDirectReports: false }
   }
 
-  // manager_id references auth.users.id; count employees who report to this one (by auth_id)
-  let hasDirectReports = false
-  if (empRow.auth_id) {
-    const { count, error: countError } = await supabase
-      .from('employees')
-      .select('*', { count: 'exact', head: true })
-      .eq('manager_id', empRow.auth_id)
-    hasDirectReports = !countError && typeof count === 'number' && count > 0
-  }
+  // manager_id now references employees.id; count employees who report to this one by employee id
+  const { count, error: countError } = await supabase
+    .from('employees')
+    .select('*', { count: 'exact', head: true })
+    .eq('manager_id', empRow.id)
+  const hasDirectReports = !countError && typeof count === 'number' && count > 0
   return { employeeId: empRow.id, hasDirectReports }
 }
 

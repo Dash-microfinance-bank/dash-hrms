@@ -278,7 +278,7 @@ export async function getManagerStatsForSelection(
 
   const orgId = myProfile.organization_id
 
-  // Fetch all employees with manager_id (auth user id) and auth_id for subordinate resolution
+  // Fetch all active employees in this org — manager_id is employees.id.
   const { data: employeesData, error } = await supabase
     .from('employees')
     .select('id, manager_id, auth_id')
@@ -290,43 +290,48 @@ export async function getManagerStatsForSelection(
     return { topManagers: [], excludedIds: [] }
   }
 
-  const employeeIdToAuthId = new Map<string, string>()
-  for (const emp of employeesData) {
-    if (emp.auth_id) employeeIdToAuthId.set(emp.id, emp.auth_id)
-  }
+  const authEnabledEmployeeIds = new Set(
+    employeesData
+      .filter((emp) => Boolean(emp.auth_id))
+      .map((emp) => emp.id)
+  )
 
-  // Count direct reports per manager (manager_id is auth user id)
+  const employeeById = new Map(
+    employeesData.map((emp) => [emp.id, emp])
+  )
+
+  // Count direct reports per manager (keyed by employee id), but only where
+  // manager belongs to this org + has auth_id (eligible to appear in picker).
   const managerReportCounts = new Map<string, number>()
   for (const emp of employeesData) {
-    if (emp.manager_id) {
-      const count = managerReportCounts.get(emp.manager_id) || 0
-      managerReportCounts.set(emp.manager_id, count + 1)
+    if (emp.manager_id && employeeById.has(emp.manager_id) && authEnabledEmployeeIds.has(emp.manager_id)) {
+      managerReportCounts.set(emp.manager_id, (managerReportCounts.get(emp.manager_id) ?? 0) + 1)
     }
   }
 
-  // Get top 5 managers by direct report count (id = auth user id)
+  // Top 5 recommended managers by direct report count (id = employee row id).
+  // These are org-scoped and auth-enabled by construction above.
   const topManagers = Array.from(managerReportCounts.entries())
     .map(([id, directReportsCount]) => ({ id, directReportsCount }))
     .sort((a, b) => b.directReportsCount - a.directReportsCount)
     .slice(0, 5)
 
-  // Build excluded IDs list (employee ids to exclude from manager dropdown)
+  // Build excluded IDs list: self + all transitive subordinates (employee row ids)
   const excludedIds: string[] = []
 
   if (employeeId) {
     excludedIds.push(employeeId)
-    const myAuthId = employeeIdToAuthId.get(employeeId)
 
     const subordinates = new Set<string>()
-    const findSubordinates = (managerAuthId: string) => {
+    const findSubordinates = (managerEmpId: string) => {
       for (const emp of employeesData) {
-        if (emp.manager_id !== managerAuthId) continue
+        if (emp.manager_id !== managerEmpId) continue
+        if (subordinates.has(emp.id)) continue // guard existing cycles
         subordinates.add(emp.id)
-        const subAuthId = employeeIdToAuthId.get(emp.id)
-        if (subAuthId) findSubordinates(subAuthId)
+        findSubordinates(emp.id)
       }
     }
-    if (myAuthId) findSubordinates(myAuthId)
+    findSubordinates(employeeId)
     excludedIds.push(...Array.from(subordinates))
   }
 

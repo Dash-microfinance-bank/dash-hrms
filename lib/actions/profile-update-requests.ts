@@ -138,6 +138,79 @@ function deriveRequestStatusFromItemCounts(
 }
 
 /**
+ * Applies approval of a DOCUMENT item: promotes the pending document_versions row
+ * and updates the parent documents row with the new current_version_id.
+ */
+async function applyApprovedDocumentItem(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  orgId: string,
+  documentVersionId: string,
+  documentId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  // Mark the version as approved.
+  const { error: versionError } = await supabase
+    .from('document_versions')
+    .update({ status: 'approved' })
+    .eq('id', documentVersionId)
+  if (versionError) return { success: false, error: versionError.message }
+
+  // Promote to current version on the parent documents row.
+  const { error: docError } = await supabase
+    .from('documents')
+    .update({ current_version_id: documentVersionId, status: 'approved' })
+    .eq('id', documentId)
+    .eq('organization_id', orgId)
+  if (docError) return { success: false, error: docError.message }
+
+  return { success: true }
+}
+
+/**
+ * Applies rejection of a DOCUMENT item:
+ * 1. Marks the `document_versions` row as rejected.
+ * 2. If the parent `documents` row has no existing approved version
+ *    (`current_version_id IS NULL`), deletes it so the document does not
+ *    linger as a phantom "pending" record. When an existing approved version
+ *    is present the `documents` row is left untouched.
+ */
+async function applyRejectedDocumentItem(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  documentVersionId: string,
+  documentId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  // Reject the version first.
+  const { error: versionError } = await supabase
+    .from('document_versions')
+    .update({ status: 'rejected' })
+    .eq('id', documentVersionId)
+  if (versionError) return { success: false, error: versionError.message }
+
+  // Check whether the parent documents row has an approved current version.
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('current_version_id')
+    .eq('id', documentId)
+    .maybeSingle()
+
+  if (doc && !doc.current_version_id) {
+    // No approved version exists — this row was created solely for the pending
+    // submission. Delete it so it cannot appear as "pending" anywhere.
+    const { error: deleteError } = await supabase
+      .from('documents')
+      .delete()
+      .eq('id', documentId)
+      .is('current_version_id', null) // Safety guard: never delete an approved doc.
+    if (deleteError) {
+      // Non-fatal: the row won't surface in any query that filters
+      // status = 'approved', but log for observability.
+      console.warn('[applyRejectedDocumentItem] Failed to delete orphaned documents row:', deleteError)
+    }
+  }
+
+  return { success: true }
+}
+
+/**
  * Recomputes profile_update_requests.status from current profile_update_request_items
  * and updates the request row. Multi-tenant: scoped by organization_id.
  */
@@ -150,7 +223,6 @@ async function syncProfileUpdateRequestStatus(
     .from('approval_items')
     .select('status')
     .eq('request_id', requestId)
-    .eq('item_type', 'FIELD')
   if (itemsError) return { success: false, error: itemsError.message }
   const list = (items ?? []) as Array<{ status: string }>
   const pending = list.filter((i) => i.status === 'pending').length
@@ -573,37 +645,57 @@ export async function approveProfileUpdateItem(itemId: string): Promise<ReviewAc
   const supabase = await createClient()
   const { data: item, error: itemError } = await supabase
     .from('approval_items')
-    .select('id, request_id, operation, field_name, new_value, target_table')
+    .select('id, request_id, item_type, operation, field_name, new_value, target_table, document_version_id, target_row_id')
     .eq('id', itemId)
-    .eq('item_type', 'FIELD')
     .single()
   if (itemError || !item) return { success: false, error: 'Item not found' }
+  const typedItem = item as {
+    id: string
+    request_id: string
+    item_type: string
+    operation: string
+    field_name: string
+    new_value: unknown
+    target_table: string | null
+    document_version_id: string | null
+    target_row_id: string | null
+  }
   const { data: req } = await supabase
     .from('approval_requests')
     .select('id, employee_id, organization_id')
-    .eq('id', (item as { request_id: string }).request_id)
+    .eq('id', typedItem.request_id)
     .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
     .single()
   if (!req || (req as { organization_id: string }).organization_id !== orgId)
     return { success: false, error: 'Request not found or access denied' }
   const employeeId = (req as { employee_id: string }).employee_id
-  const applyResult = await applyApprovedItem(
-    supabase,
-    orgId,
-    employeeId,
-    item as unknown as ItemForApply
-  )
+
+  let applyResult: { success: true } | { success: false; error: string }
+  if (typedItem.item_type === 'DOCUMENT') {
+    if (!typedItem.document_version_id || !typedItem.target_row_id)
+      return { success: false, error: 'Document item is missing version or document reference' }
+    applyResult = await applyApprovedDocumentItem(
+      supabase,
+      orgId,
+      typedItem.document_version_id,
+      typedItem.target_row_id
+    )
+  } else {
+    applyResult = await applyApprovedItem(
+      supabase,
+      orgId,
+      employeeId,
+      typedItem as unknown as ItemForApply
+    )
+  }
   if (!applyResult.success) return applyResult
+
   const { error: updateError } = await supabase
     .from('approval_items')
     .update({ status: 'approved' })
     .eq('id', itemId)
   if (updateError) return { success: false, error: updateError.message }
-  const syncResult = await syncProfileUpdateRequestStatus(
-    supabase,
-    (item as { request_id: string }).request_id,
-    orgId
-  )
+  const syncResult = await syncProfileUpdateRequestStatus(supabase, typedItem.request_id, orgId)
   if (!syncResult.success) return syncResult
   revalidatePath('/dashboard/admin/employees/profile-update-requests')
   revalidatePath('/dashboard/admin/employees')
@@ -616,29 +708,41 @@ export async function rejectProfileUpdateItem(itemId: string): Promise<ReviewAct
   const supabase = await createClient()
   const { data: item, error: itemError } = await supabase
     .from('approval_items')
-    .select('id, request_id')
+    .select('id, request_id, item_type, document_version_id, target_row_id')
     .eq('id', itemId)
-    .eq('item_type', 'FIELD')
     .single()
   if (itemError || !item) return { success: false, error: 'Item not found' }
+  const typedItem = item as {
+    id: string
+    request_id: string
+    item_type: string
+    document_version_id: string | null
+    target_row_id: string | null
+  }
   const { data: req } = await supabase
     .from('approval_requests')
     .select('id, organization_id')
-    .eq('id', (item as { request_id: string }).request_id)
+    .eq('id', typedItem.request_id)
     .eq('request_type', PROFILE_UPDATE_REQUEST_TYPE)
     .single()
   if (!req || (req as { organization_id: string }).organization_id !== orgId)
     return { success: false, error: 'Request not found or access denied' }
+
+  if (typedItem.item_type === 'DOCUMENT' && typedItem.document_version_id && typedItem.target_row_id) {
+    const rejectResult = await applyRejectedDocumentItem(
+      supabase,
+      typedItem.document_version_id,
+      typedItem.target_row_id
+    )
+    if (!rejectResult.success) return rejectResult
+  }
+
   const { error: updateError } = await supabase
     .from('approval_items')
     .update({ status: 'rejected' })
     .eq('id', itemId)
   if (updateError) return { success: false, error: updateError.message }
-  const syncResult = await syncProfileUpdateRequestStatus(
-    supabase,
-    (item as { request_id: string }).request_id,
-    orgId
-  )
+  const syncResult = await syncProfileUpdateRequestStatus(supabase, typedItem.request_id, orgId)
   if (!syncResult.success) return syncResult
   revalidatePath('/dashboard/admin/employees/profile-update-requests')
   return { success: true }
@@ -659,19 +763,34 @@ export async function approveAllProfileUpdateRequest(requestId: string): Promise
   const employeeId = (req as { employee_id: string }).employee_id
   const { data: pendingItems, error: itemsError } = await supabase
     .from('approval_items')
-    .select('id, operation, field_name, new_value, target_table')
+    .select('id, item_type, operation, field_name, new_value, target_table, document_version_id, target_row_id')
     .eq('request_id', requestId)
     .eq('status', 'pending')
-    .eq('item_type', 'FIELD')
   if (itemsError) return { success: false, error: itemsError.message }
-  const items = (pendingItems ?? []) as Array<ItemForApply & { id: string }>
+  type PendingItemRow = ItemForApply & {
+    id: string
+    item_type: string
+    document_version_id: string | null
+    target_row_id: string | null
+  }
+  const items = (pendingItems ?? []) as PendingItemRow[]
   if (items.length === 0) {
     return { success: false, error: 'No pending items to approve.' }
   }
   for (const item of items) {
-    const applyResult = await applyApprovedItem(supabase, orgId, employeeId, item)
+    let applyResult: { success: true } | { success: false; error: string }
+    if (item.item_type === 'DOCUMENT') {
+      if (!item.document_version_id || !item.target_row_id) {
+        return { success: false, error: `Document item ${item.id} is missing version or document reference` }
+      }
+      applyResult = await applyApprovedDocumentItem(supabase, orgId, item.document_version_id, item.target_row_id)
+    } else {
+      applyResult = await applyApprovedItem(supabase, orgId, employeeId, item)
+    }
     if (!applyResult.success) {
-      const context = item.operation === 'field_update' ? item.field_name : item.target_table ?? item.id
+      const context = item.item_type === 'DOCUMENT'
+        ? `document:${item.document_version_id ?? item.id}`
+        : item.operation === 'field_update' ? item.field_name : item.target_table ?? item.id
       return { success: false, error: `Failed to apply change (${context}): ${applyResult.error}` }
     }
   }
@@ -680,7 +799,6 @@ export async function approveAllProfileUpdateRequest(requestId: string): Promise
     .update({ status: 'approved' })
     .eq('request_id', requestId)
     .in('status', ['pending'])
-    .eq('item_type', 'FIELD')
   if (updateItemsError) return { success: false, error: updateItemsError.message }
   const syncResult = await syncProfileUpdateRequestStatus(supabase, requestId, orgId)
   if (!syncResult.success) return syncResult
@@ -703,20 +821,53 @@ export async function rejectAllProfileUpdateRequest(requestId: string): Promise<
     return { success: false, error: 'Request not found or access denied' }
   const { data: pendingRows } = await supabase
     .from('approval_items')
-    .select('id')
+    .select('id, item_type, document_version_id, target_row_id')
     .eq('request_id', requestId)
     .eq('status', 'pending')
-    .eq('item_type', 'FIELD')
-  const pendingCount = (pendingRows ?? []).length
-  if (pendingCount === 0) {
+  const pendingList = (pendingRows ?? []) as Array<{
+    id: string
+    item_type: string
+    document_version_id: string | null
+    target_row_id: string | null
+  }>
+  if (pendingList.length === 0) {
     return { success: false, error: 'No pending items to reject.' }
+  }
+
+  // For DOCUMENT items: reject the version rows, then clean up any orphaned
+  // documents rows that have no existing approved version.
+  const docItems = pendingList.filter(
+    (r) => r.item_type === 'DOCUMENT' && r.document_version_id
+  )
+  if (docItems.length > 0) {
+    const docVersionIds = docItems.map((r) => r.document_version_id as string)
+    const { error: versionError } = await supabase
+      .from('document_versions')
+      .update({ status: 'rejected' })
+      .in('id', docVersionIds)
+    if (versionError) return { success: false, error: versionError.message }
+
+    // Delete any documents rows that were created solely for this pending
+    // request (current_version_id IS NULL = no previously approved version).
+    const docRowIds = docItems
+      .map((r) => r.target_row_id)
+      .filter((id): id is string => !!id)
+    if (docRowIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('documents')
+        .delete()
+        .in('id', docRowIds)
+        .is('current_version_id', null)
+      if (deleteError) {
+        console.warn('[rejectAllProfileUpdateRequest] Failed to clean up orphaned documents rows:', deleteError)
+      }
+    }
   }
   const { error: updateItemsError } = await supabase
     .from('approval_items')
     .update({ status: 'rejected' })
     .eq('request_id', requestId)
     .in('status', ['pending'])
-    .eq('item_type', 'FIELD')
   if (updateItemsError) return { success: false, error: updateItemsError.message }
   const syncResult = await syncProfileUpdateRequestStatus(supabase, requestId, orgId)
   if (!syncResult.success) return syncResult

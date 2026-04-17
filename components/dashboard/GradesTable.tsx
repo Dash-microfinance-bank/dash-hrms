@@ -67,7 +67,11 @@ export function GradesTable({ data }: GradesTableProps) {
       {
         id: 'sn',
         header: 'S/N',
-        cell: ({ row }) => row.index + 1,
+        cell: ({ row, table }) => {
+          const { pageIndex, pageSize } = table.getState().pagination
+          const position = table.getRowModel().rows.findIndex((r) => r.id === row.id)
+          return pageIndex * pageSize + position + 1
+        },
         size: 60,
         enableSorting: false,
       },

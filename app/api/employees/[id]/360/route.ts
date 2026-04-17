@@ -322,31 +322,20 @@ export async function GET(
     const location = locationResult.data as { address: string | null } | null
     const avatarUrl = (emp.avatar_url ?? null) as string | null
 
-    // Manager name from that manager's employee_biodata (not profiles)
+    // Manager name — employees.manager_id is now employees.id (no auth_id hop needed)
     let managerName: string | null = null
-    const managerAuthId = emp.manager_id
-    if (managerAuthId) {
-      const { data: managerEmpData } = await supabase
-        .from('employees')
-        .select('id')
+    if (emp.manager_id) {
+      const { data: managerBioData } = await supabase
+        .from('employee_biodata')
+        .select('title, firstname, lastname')
         .eq('organization_id', orgId)
-        .eq('auth_id', managerAuthId)
+        .eq('employee_id', emp.manager_id)
         .maybeSingle()
 
-      const managerEmp = managerEmpData as { id: string } | null
-      if (managerEmp) {
-        const { data: managerBioData } = await supabase
-          .from('employee_biodata')
-          .select('title, firstname, lastname')
-          .eq('organization_id', orgId)
-          .eq('employee_id', managerEmp.id)
-          .maybeSingle()
-
-        if (managerBioData) {
-          const bio = managerBioData as { title: string | null; firstname: string | null; lastname: string | null }
-          const parts = [bio.title, bio.firstname, bio.lastname].filter(Boolean)
-          managerName = parts.length > 0 ? (parts.join(' ') as string) : null
-        }
+      if (managerBioData) {
+        const bio = managerBioData as { title: string | null; firstname: string | null; lastname: string | null }
+        const parts = [bio.title, bio.firstname, bio.lastname].filter(Boolean)
+        managerName = parts.length > 0 ? (parts.join(' ') as string) : null
       }
     }
 

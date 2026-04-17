@@ -93,7 +93,7 @@ export default async function DashboardPage() {
 
   const managerName = (() => {
     if (!employee.manager_id) return 'Not assigned'
-    const manager = employees.find((e) => e.auth_id === employee.manager_id)
+    const manager = employees.find((e) => e.id === employee.manager_id)
     if (!manager) return 'Not assigned'
     const parts: string[] = []
     if (manager.biodata_firstname) parts.push(manager.biodata_firstname)
@@ -319,7 +319,7 @@ export default async function DashboardPage() {
       emp.report_location ? locationById.get(emp.report_location) ?? '—' : '—'
 
     const mgr = emp.manager_id
-      ? employees.find((e) => e.auth_id === emp.manager_id)
+      ? employees.find((e) => e.id === emp.manager_id)
       : null
     let mgrName = 'Not assigned'
     if (mgr) {

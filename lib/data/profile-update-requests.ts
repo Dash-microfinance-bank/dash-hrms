@@ -201,6 +201,8 @@ export type ProfileUpdateRequestItemRow = {
   status: 'pending' | 'approved' | 'rejected'
   operation: 'field_update' | 'create_record'
   target_table: string | null
+  /** For DOCUMENT items: the `documents.id` this version belongs to. */
+  target_row_id: string | null
 }
 
 export type ProfileUpdateRequestWithItems = {
@@ -282,10 +284,9 @@ export async function getProfileUpdateRequestWithItems(
     supabase
       .from('approval_items')
       .select(
-        'id, request_id, item_type, document_version_id, field_name, field_group, old_value, new_value, status, operation, target_table',
+        'id, request_id, item_type, document_version_id, field_name, field_group, old_value, new_value, status, operation, target_table, target_row_id',
       )
       .eq('request_id', requestId)
-      .eq('item_type', 'FIELD')
       .order('created_at'),
     supabase
       .from('employees')

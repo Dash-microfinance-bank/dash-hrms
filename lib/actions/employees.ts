@@ -251,15 +251,18 @@ export async function createSingleEmployee(
     return { success: false, error: 'End date is required for fixed-term, temporary, intern, and contractor contracts' }
   }
 
-  // Validate manager (manager_id is auth user id)
+  // Validate manager (manager_id is now employees.id)
   if (input.manager_id) {
+    if (input.manager_id === 'self') return { success: false, error: 'An employee cannot report to themselves.' }
     const { data: manager, error: managerError } = await supabase
       .from('employees')
-      .select('id, organization_id')
-      .eq('auth_id', input.manager_id)
+      .select('id, organization_id, active, auth_id')
+      .eq('id', input.manager_id)
       .single()
     if (managerError || !manager) return { success: false, error: 'Selected line manager was not found' }
     if (manager.organization_id !== orgId) return { success: false, error: 'Line manager must be from your organization' }
+    if ((manager as { active: boolean }).active !== true) return { success: false, error: 'Line manager must be an active employee' }
+    if (!(manager as { auth_id: string | null }).auth_id) return { success: false, error: 'Line manager must have an active login account' }
   }
 
   // Validate location
@@ -294,6 +297,44 @@ export async function createSingleEmployee(
     const msg = employeeError.message.toLowerCase()
     if (msg.includes('employees_org_staff_id_key')) return { success: false, error: 'A staff ID with this value already exists in your organization' }
     return { success: false, error: employeeError.message }
+  }
+
+  // ── Reporting line: create initial active row if a manager is assigned ───
+  if (input.manager_id) {
+    await supabase.from('employee_reporting_lines').insert({
+      organization_id: orgId,
+      employee_id: employee.id,
+      manager_id: input.manager_id,
+      effective_from: input.start_date ?? new Date().toISOString(),
+      effective_to: null,
+    })
+
+    // Grant 'manager' role to the new manager (if they have an auth account and
+    // don't already hold the role)
+    const { data: mgrEmp } = await supabase
+      .from('employees')
+      .select('auth_id')
+      .eq('id', input.manager_id)
+      .single()
+
+    const mgrAuthId = (mgrEmp as { auth_id: string | null } | null)?.auth_id
+    if (mgrAuthId) {
+      const { data: existingMgrRole } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('user_id', mgrAuthId)
+        .eq('role', 'manager')
+        .eq('organization_id', orgId)
+        .maybeSingle()
+
+      if (!existingMgrRole) {
+        await supabase.from('user_roles').insert({
+          user_id: mgrAuthId,
+          role: 'manager',
+          organization_id: orgId,
+        })
+      }
+    }
   }
 
   // ── Insert biodata ───────────────────────────────────────────────────────

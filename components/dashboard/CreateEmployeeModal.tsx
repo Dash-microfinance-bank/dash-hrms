@@ -30,9 +30,9 @@ import { ChevronDownIcon, SearchIcon, UserIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type LineManagerOption = {
-  /** Auth user id (auth.users.id) — value saved as employees.manager_id */
+  /** Employee row id (employees.id) — value saved as employees.manager_id */
   id: string
-  /** Employee record id — used for exclusion (e.g. cannot select self/subordinates) */
+  /** Same as id — kept for backward-compatible exclusion checks */
   employeeId: string
   name: string
   jobRoleDisplay: string

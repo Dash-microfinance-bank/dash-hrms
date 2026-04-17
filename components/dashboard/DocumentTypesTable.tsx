@@ -55,9 +55,9 @@ export function DocumentTypesTable({ data, categories }: DocumentTypesTableProps
         id: 'sn',
         header: 'S/N',
         cell: ({ row, table }) => {
-          const pageIndex = table.getState().pagination.pageIndex
-          const pageSize = table.getState().pagination.pageSize
-          return pageIndex * pageSize + row.index + 1
+          const { pageIndex, pageSize } = table.getState().pagination
+          const position = table.getRowModel().rows.findIndex((r) => r.id === row.id)
+          return pageIndex * pageSize + position + 1
         },
         size: 50,
         enableSorting: false,

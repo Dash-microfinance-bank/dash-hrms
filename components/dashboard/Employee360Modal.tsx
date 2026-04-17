@@ -66,6 +66,7 @@ type Employee360ModalProps = {
   jobRoles: JobRoleRow[]
   lineManagerOptions: LineManagerOption[]
   managerStats: ManagerStats
+  managerHierarchy: Array<{ id: string; managerId: string | null; hasAuth: boolean }>
   locations: LocationRow[]
 }
 
@@ -945,6 +946,7 @@ function RoleCard({
   jobRoles,
   lineManagerOptions,
   managerStats,
+  managerHierarchy,
   locations,
 }: {
   employeeId: string
@@ -955,6 +957,7 @@ function RoleCard({
   jobRoles: JobRoleRow[]
   lineManagerOptions: LineManagerOption[]
   managerStats: ManagerStats
+  managerHierarchy: Array<{ id: string; managerId: string | null; hasAuth: boolean }>
   locations: LocationRow[]
 }) {
   const [editing, setEditing] = useState(false)
@@ -990,9 +993,29 @@ function RoleCard({
     [jobRoles, form.department_id]
   )
 
+  const localExcludedManagerIds = useMemo(() => {
+    const excluded = new Set<string>(managerStats.excludedIds)
+    excluded.add(employeeId) // always prevent self-reporting in picker
+
+    // Build descendants from current org hierarchy to block circular chains.
+    const subordinates = new Set<string>()
+    const findSubordinates = (managerId: string) => {
+      for (const node of managerHierarchy) {
+        if (node.managerId !== managerId) continue
+        if (subordinates.has(node.id)) continue
+        subordinates.add(node.id)
+        findSubordinates(node.id)
+      }
+    }
+    findSubordinates(employeeId)
+    for (const id of subordinates) excluded.add(id)
+
+    return excluded
+  }, [employeeId, managerHierarchy, managerStats.excludedIds])
+
   const availableManagers = useMemo(
-    () => lineManagerOptions.filter((m) => m.employeeId !== employeeId),
-    [lineManagerOptions, employeeId]
+    () => lineManagerOptions.filter((m) => !localExcludedManagerIds.has(m.id)),
+    [lineManagerOptions, localExcludedManagerIds]
   )
 
   const topManagers = useMemo(() => {
@@ -2534,6 +2557,7 @@ export function Employee360Modal({
   jobRoles,
   lineManagerOptions,
   managerStats,
+  managerHierarchy,
   locations,
 }: Employee360ModalProps) {
   const [data, setData] = useState<Employee360Response | null>(null)
@@ -2678,6 +2702,7 @@ export function Employee360Modal({
                     jobRoles={jobRoles}
                     lineManagerOptions={lineManagerOptions}
                     managerStats={managerStats}
+                    managerHierarchy={managerHierarchy}
                     locations={locations}
                   />
                   <ContractCard employeeId={employeeId!} employee={data.employee} historyByField={historyByField} onSaveSuccess={onSaveSuccess} />

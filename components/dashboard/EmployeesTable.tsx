@@ -62,6 +62,7 @@ import {
 } from '@/components/dashboard/CreateEmployeeModal'
 import { Employee360Modal } from '@/components/dashboard/Employee360Modal'
 import { exitEmployee } from '@/lib/actions/employees'
+import { formatEmployeeName, toLineManagerOptions } from '@/lib/utils/employee-format'
 import {
   Popover,
   PopoverContent,
@@ -154,42 +155,6 @@ type EmployeeFilters = {
   ethnicGroup: string
 }
 
-function formatEmployeeName(employee: EmployeeRow): string {
-  const parts: string[] = []
-  if (employee.biodata_title) {
-    parts.push(employee.biodata_title)
-  }
-  if (employee.biodata_firstname) {
-    parts.push(employee.biodata_firstname)
-  }
-  if (employee.biodata_lastname) {
-    parts.push(employee.biodata_lastname)
-  }
-  if (parts.length === 0) {
-    return employee.email
-  }
-  return parts.join(' ')
-}
-
-function toLineManagerOptions(employees: EmployeeRow[]): LineManagerOption[] {
-  return employees
-    .filter((emp) => !!emp.auth_id)
-    .map((emp) => {
-      const name = formatEmployeeName(emp)
-      const jobRoleDisplay =
-        emp.job_role_title && emp.job_role_code?.trim()
-          ? `${emp.job_role_title} (${emp.job_role_code.trim()})`
-          : emp.job_role_title ?? '—'
-      return {
-        id: emp.auth_id!,
-        employeeId: emp.id,
-        name,
-        jobRoleDisplay,
-        avatarUrl: emp.avatar_url ?? null,
-      }
-    })
-}
-
 type ExportRow = Record<string, string>
 
 export function EmployeesTable({
@@ -225,6 +190,15 @@ export function EmployeesTable({
   const [lineManagerFilterSearch, setLineManagerFilterSearch] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const managerHierarchy = useMemo(
+    () =>
+      employees.map((emp) => ({
+        id: emp.id,
+        managerId: emp.manager_id,
+        hasAuth: Boolean(emp.auth_id),
+      })),
+    [employees]
+  )
 
   const selectedLineManager = useMemo(
     () => lineManagerOptions.find((m) => m.id === filters.lineManagerId) ?? null,
@@ -368,7 +342,11 @@ export function EmployeesTable({
       {
         id: 'sn',
         header: 'S/N',
-        cell: ({ row }) => row.index + 1,
+        cell: ({ row, table }) => {
+          const { pageIndex, pageSize } = table.getState().pagination
+          const position = table.getRowModel().rows.findIndex((r) => r.id === row.id)
+          return pageIndex * pageSize + position + 1
+        },
         size: 60,
         enableSorting: false,
       },
@@ -1248,6 +1226,7 @@ export function EmployeesTable({
         jobRoles={jobRoles}
         lineManagerOptions={lineManagerOptions}
         managerStats={managerStats}
+        managerHierarchy={managerHierarchy}
         locations={locations}
       />
 
