@@ -27,9 +27,11 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   BarChart2,
+  BadgeDollarSign,
   Building2,
   Briefcase,
   FileText,
+  HandCoins,
   Layers,
   LogOut,
   MapPin,
@@ -39,11 +41,12 @@ import {
   UserCheck,
   UserPlus,
   Users,
+  Wallet,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
-const navItems = [
+const organizationalStructureNavItems = [
   { label: 'Office Locations', href: '/dashboard/admin/locations', icon: MapPin },
   { label: 'Departments', href: '/dashboard/admin/departments', icon: Building2 },
   { label: 'Job roles', href: '/dashboard/admin/job-roles', icon: Briefcase },
@@ -63,6 +66,14 @@ const documentsNavItems = [
   { label: 'All documents', href: '/dashboard/admin/documents', icon: FileText },
   { label: 'Document categories', href: '/dashboard/admin/document-categories', icon: Layers },
   { label: 'Document types', href: '/dashboard/admin/document-types', icon: Briefcase },
+] as const
+
+const payrollNavItems = [
+  { label: 'Payroll Run', href: '/dashboard/admin/payroll-run', icon: Wallet },
+  { label: 'Allowances', href: '/dashboard/admin/payroll/allowances', icon: HandCoins },
+  { label: 'Deductions', href: '/dashboard/admin/payroll/deductions', icon: BadgeDollarSign },
+  { label: 'Pay groups', href: '/dashboard/admin/payroll/pay-groups', icon: Users },
+  { label: 'Approval workflow', href: '/dashboard/admin/payroll/approval-workflow', icon: FileText },
 ] as const
 
 export function AdminSidebar() {
@@ -88,7 +99,7 @@ export function AdminSidebar() {
           <SidebarGroupLabel>Organizational structure</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => {
+              {organizationalStructureNavItems.map((item) => {
                 const Icon = item.icon
                 const isActive = pathname === item.href
                 return (
@@ -141,6 +152,32 @@ export function AdminSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {documentsNavItems.map((item) => {
+                const Icon = item.icon
+                const isActive = pathname === item.href
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      className={cn(isActive && 'bg-primary! text-white!')}
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.label}
+                    >
+                      <Link href={item.href}>
+                        <Icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Payroll</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {payrollNavItems.map((item) => {
                 const Icon = item.icon
                 const isActive = pathname === item.href
                 return (

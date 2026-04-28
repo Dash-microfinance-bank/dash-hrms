@@ -1,0 +1,16 @@
+{
+  "plugins": {
+    "shadcn": {
+      "enabled": true
+    },
+    "docs-canvas": {
+      "enabled": true
+    },
+    "resend": {
+      "enabled": true
+    },
+    "supabase": {
+      "enabled": true
+    }
+  }
+}

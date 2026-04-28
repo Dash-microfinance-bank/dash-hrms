@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react'
 import { EmployeesTableSkeleton } from '@/components/dashboard/EmployeesTableSkeleton'
-import { EmployeesTableWithData } from '../../../../components/dashboard/EmployeesTableWithData'
+import { EmployeesTableWithData } from '@/components/dashboard/EmployeesTableWithData'
 
 export default function EmployeesPage() {
   return (
