@@ -86,8 +86,8 @@ export async function createGrade(input: GradeInput): Promise<GradeActionResult>
     return { success: false, error: 'Name is required' }
   }
 
-  if (minSalary !== null && maxSalary !== null && minSalary > maxSalary) {
-    return { success: false, error: 'Minimum salary cannot be greater than maximum salary' }
+  if (minSalary !== null && maxSalary !== null && minSalary >= maxSalary) {
+    return { success: false, error: 'Minimum salary must be less than maximum salary' }
   }
 
   const { error } = await supabase.from('grades').insert({
@@ -151,8 +151,8 @@ export async function updateGrade(
     return { success: false, error: 'Name is required' }
   }
 
-  if (minSalary !== null && maxSalary !== null && minSalary > maxSalary) {
-    return { success: false, error: 'Minimum salary cannot be greater than maximum salary' }
+  if (minSalary !== null && maxSalary !== null && minSalary >= maxSalary) {
+    return { success: false, error: 'Minimum salary must be less than maximum salary' }
   }
 
   const { error } = await supabase

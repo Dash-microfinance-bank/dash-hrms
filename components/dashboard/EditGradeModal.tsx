@@ -27,8 +27,8 @@ const editGradeSchema = z.object({
     .optional()
     .or(z.literal('')),
   level: z.string().optional(),
-  min_salary: z.string().optional(),
-  max_salary: z.string().optional(),
+  min_salary: z.string().trim().min(1, 'Minimum salary is required'),
+  max_salary: z.string().trim().min(1, 'Maximum salary is required'),
   currency: z
     .string()
     .max(10, 'Currency code is too long')
@@ -86,34 +86,26 @@ function EditGradeFormBody({
       return
     }
 
-    const parseMoney = (input: string | undefined) => {
-      const raw = input?.trim()
-      if (!raw) return null
-      const num = Number(raw.replace(/,/g, ''))
+    const parseMoney = (input: string) => {
+      const num = Number(input.trim().replace(/,/g, ''))
       return Number.isFinite(num) ? num : NaN
     }
 
     const minSalary = parseMoney(values.min_salary)
     const maxSalary = parseMoney(values.max_salary)
 
-    if (values.min_salary && Number.isNaN(minSalary)) {
+    if (Number.isNaN(minSalary)) {
       toast.error('Enter a valid minimum salary')
       return
     }
 
-    if (values.max_salary && Number.isNaN(maxSalary)) {
+    if (Number.isNaN(maxSalary)) {
       toast.error('Enter a valid maximum salary')
       return
     }
 
-    if (
-      minSalary !== null &&
-      !Number.isNaN(minSalary) &&
-      maxSalary !== null &&
-      !Number.isNaN(maxSalary) &&
-      minSalary > maxSalary
-    ) {
-      toast.error('Minimum salary cannot be greater than maximum salary')
+    if (minSalary >= maxSalary) {
+      toast.error('Minimum salary must be less than maximum salary')
       return
     }
 
@@ -121,10 +113,8 @@ function EditGradeFormBody({
       name: values.name,
       code: values.code || null,
       level,
-      min_salary:
-        minSalary !== null && !Number.isNaN(minSalary) ? minSalary : null,
-      max_salary:
-        maxSalary !== null && !Number.isNaN(maxSalary) ? maxSalary : null,
+      min_salary: minSalary,
+      max_salary: maxSalary,
       currency:
         values.currency && values.currency.trim() !== ''
           ? values.currency.trim()
@@ -211,7 +201,7 @@ function EditGradeFormBody({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-2">
             <label htmlFor="edit-grade-min-salary" className="ml-2 text-sm font-medium">
-              Min salary (optional)
+              Min salary
             </label>
             <Input
               id="edit-grade-min-salary"
@@ -230,7 +220,7 @@ function EditGradeFormBody({
 
           <div className="space-y-2">
             <label htmlFor="edit-grade-max-salary" className="ml-2 text-sm font-medium">
-              Max salary (optional)
+              Max salary
             </label>
             <Input
               id="edit-grade-max-salary"

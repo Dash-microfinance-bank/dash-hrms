@@ -163,7 +163,7 @@ export function GradesTable({ data }: GradesTableProps) {
           return a - b
         },
         cell: ({ row }) => {
-          const currency = row.original.currency || 'NGN'
+          const currency = '₦'
           const min = formatAmount(row.original.min_salary)
           const max = formatAmount(row.original.max_salary)
 

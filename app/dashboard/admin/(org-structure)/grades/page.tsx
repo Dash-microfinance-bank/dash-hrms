@@ -7,7 +7,7 @@ export default function GradesPage() {
     <section className="p-4">
       <h1 className="text-2xl font-semibold mb-2">Grades</h1>
       <p className="text-muted-foreground">
-        Manage employee grades, levels, and compensation structures.
+        Manage employee grades and compensation structures.
       </p>
       <div className="mt-6">
         <Suspense fallback={<GradesTableSkeleton />}>
