@@ -32,7 +32,7 @@ import {
   Briefcase,
   FileText,
   HandCoins,
-  Layers,
+  Layers as LayersIcon,
   LogOut,
   MapPin,
   Settings,
@@ -50,8 +50,9 @@ const organizationalStructureNavItems = [
   { label: 'Office Locations', href: '/dashboard/admin/locations', icon: MapPin },
   { label: 'Departments', href: '/dashboard/admin/departments', icon: Building2 },
   { label: 'Job roles', href: '/dashboard/admin/job-roles', icon: Briefcase },
-  { label: 'Grades', href: '/dashboard/admin/grades', icon: TrendingUp }
-]
+  { label: 'Grades', href: '/dashboard/admin/grades', icon: TrendingUp },
+  { label: 'Levels', href: '/dashboard/admin/levels', icon: LayersIcon }
+] as const
 
 const hrisNavItems = [
   { label: 'Employees Analytics', href: '/dashboard/admin/employees/analytics', icon: BarChart2 },
@@ -64,13 +65,14 @@ const hrisNavItems = [
 
 const documentsNavItems = [
   { label: 'All documents', href: '/dashboard/admin/documents', icon: FileText },
-  { label: 'Document categories', href: '/dashboard/admin/document-categories', icon: Layers },
+  { label: 'Document categories', href: '/dashboard/admin/document-categories', icon: LayersIcon },
   { label: 'Document types', href: '/dashboard/admin/document-types', icon: Briefcase },
 ] as const
 
 const payrollNavItems = [
   { label: 'Payroll Run', href: '/dashboard/admin/payroll-run', icon: Wallet },
   { label: 'Allowances', href: '/dashboard/admin/payroll/allowances', icon: HandCoins },
+  { label: 'Earning structures', href: '/dashboard/admin/payroll/earning-structure', icon: TrendingUp },
   { label: 'Deductions', href: '/dashboard/admin/payroll/deductions', icon: BadgeDollarSign },
   { label: 'Pay groups', href: '/dashboard/admin/payroll/pay-groups', icon: Users },
   { label: 'Approval workflow', href: '/dashboard/admin/payroll/approval-workflow', icon: FileText },
