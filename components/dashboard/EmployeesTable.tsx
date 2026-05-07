@@ -56,6 +56,9 @@ import type { EmployeeRow, ManagerStats } from '@/lib/data/employees'
 import type { DepartmentRow } from '@/lib/data/departments'
 import type { JobRoleRow } from '@/lib/data/job-roles'
 import type { LocationRow } from '@/lib/data/locations'
+import type { PayGroupRow } from '@/lib/data/pay-groups'
+import type { EmployeeLevelRow } from '@/lib/data/employee-levels'
+import type { GradeRow } from '@/lib/data/grades'
 import {
   CreateEmployeeModal,
   type LineManagerOption,
@@ -139,6 +142,9 @@ type EmployeesTableProps = {
   jobRoles: JobRoleRow[]
   managerStats: ManagerStats
   locations: LocationRow[]
+  payGroups: PayGroupRow[]
+  levels: EmployeeLevelRow[]
+  grades: GradeRow[]
 }
 
 type EmployeeFilters = {
@@ -163,6 +169,9 @@ export function EmployeesTable({
   jobRoles,
   managerStats,
   locations,
+  payGroups,
+  levels,
+  grades,
 }: EmployeesTableProps) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
@@ -706,7 +715,7 @@ export function EmployeesTable({
 
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 bg-card py-3 px-3 rounded-md">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <div className="relative w-full sm:w-64">
@@ -794,7 +803,7 @@ export function EmployeesTable({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Department</span>
           <select
-            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
             value={filters.departmentId}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, departmentId: e.target.value }))
@@ -818,7 +827,7 @@ export function EmployeesTable({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Job role</span>
           <select
-            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
             value={filters.jobRoleId}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, jobRoleId: e.target.value }))
@@ -842,7 +851,7 @@ export function EmployeesTable({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Employment status</span>
           <select
-            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
             value={filters.employmentStatus}
             onChange={(e) =>
               setFilters((prev) => ({
@@ -860,7 +869,7 @@ export function EmployeesTable({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Contract type</span>
           <select
-            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
             value={filters.contractType}
             onChange={(e) =>
               setFilters((prev) => ({
@@ -909,7 +918,7 @@ export function EmployeesTable({
                   <SearchIcon className="absolute left-2.5 top-2.5 size-3 text-muted-foreground" />
                   <Input
                     placeholder="Search..."
-                    className="h-7 pl-7 pr-2 text-xs focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+                    className="h-7 pl-7 pr-2 text-xs focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
                     value={lineManagerFilterSearch}
                     onChange={(e) => setLineManagerFilterSearch(e.target.value)}
                     onKeyDown={(e) => e.stopPropagation()}
@@ -981,7 +990,7 @@ export function EmployeesTable({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Work location</span>
           <select
-            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
             value={filters.workLocationId}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, workLocationId: e.target.value }))
@@ -1010,7 +1019,7 @@ export function EmployeesTable({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">State of origin</span>
           <select
-            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
             value={filters.stateOfOrigin}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, stateOfOrigin: e.target.value }))
@@ -1028,7 +1037,7 @@ export function EmployeesTable({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Gender</span>
           <select
-            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
             value={filters.gender}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, gender: e.target.value }))
@@ -1052,7 +1061,7 @@ export function EmployeesTable({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Marital status</span>
           <select
-            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
             value={filters.maritalStatus}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, maritalStatus: e.target.value }))
@@ -1070,7 +1079,7 @@ export function EmployeesTable({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Religion</span>
           <select
-            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
             value={filters.religion}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, religion: e.target.value }))
@@ -1088,7 +1097,7 @@ export function EmployeesTable({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Ethnic group</span>
           <select
-            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+            className="h-8 rounded-md border bg-background px-2 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
             value={filters.ethnicGroup}
             onChange={(e) =>
               setFilters((prev) => ({ ...prev, ethnicGroup: e.target.value }))
@@ -1130,7 +1139,7 @@ export function EmployeesTable({
         </div>
       </div> : null}
 
-      <div className="rounded-md border">
+      <div className="rounded-md">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -1228,6 +1237,9 @@ export function EmployeesTable({
         managerStats={managerStats}
         managerHierarchy={managerHierarchy}
         locations={locations}
+        payGroups={payGroups}
+        levels={levels}
+        grades={grades}
       />
 
       <AlertDialog open={!!exitTarget} onOpenChange={(o) => { if (!o && !exiting) setExitTarget(null) }}>

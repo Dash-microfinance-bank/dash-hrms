@@ -274,7 +274,7 @@ function CreateEmployeeFormBody({
               id="employee-staff-id"
               placeholder="e.g. EMP001"
               {...register('staff_id')}
-              className={errors.staff_id ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'}
+              className={errors.staff_id ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'}
             />
             {errors.staff_id && (
               <p className="ml-2 text-xs text-destructive">{errors.staff_id.message}</p>
@@ -289,7 +289,7 @@ function CreateEmployeeFormBody({
               type="email"
               placeholder="employee@example.com"
               {...register('email')}
-              className={errors.email ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'}
+              className={errors.email ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'}
             />
             {errors.email && (
               <p className="ml-2 text-xs text-destructive">{errors.email.message}</p>
@@ -306,7 +306,7 @@ function CreateEmployeeFormBody({
               id="employee-firstname"
               placeholder="e.g. Michael"
               {...register('firstname')}
-              className={errors.firstname ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'}
+              className={errors.firstname ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'}
             />
             {errors.firstname && (
               <p className="ml-2 text-xs text-destructive">{errors.firstname.message}</p>
@@ -320,7 +320,7 @@ function CreateEmployeeFormBody({
               id="employee-lastname"
               placeholder="e.g. Adeniji"
               {...register('lastname')}
-              className={errors.lastname ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'}
+              className={errors.lastname ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'}
             />
             {errors.lastname && (
               <p className="ml-2 text-xs text-destructive">{errors.lastname.message}</p>
@@ -338,7 +338,7 @@ function CreateEmployeeFormBody({
               {...register('gender')}
               className={cn(
                 'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm',
-                errors.gender ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
+                errors.gender ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'
               )}
             >
               {GENDER_OPTIONS.map((opt) => (
@@ -359,7 +359,7 @@ function CreateEmployeeFormBody({
               id="employee-phone"
               placeholder="e.g. +234 800 000 0000"
               {...register('phone')}
-              className={errors.phone ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'}
+              className={errors.phone ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'}
             />
             {errors.phone && (
               <p className="ml-2 text-xs text-destructive">{errors.phone.message}</p>
@@ -377,7 +377,7 @@ function CreateEmployeeFormBody({
               {...register('contract_type')}
               className={cn(
                 'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm',
-                errors.contract_type ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
+                errors.contract_type ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'
               )}
             >
               {CONTRACT_TYPES.map((opt) => (
@@ -399,7 +399,7 @@ function CreateEmployeeFormBody({
               {...register('employment_status')}
               className={cn(
                 'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm',
-                errors.employment_status ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
+                errors.employment_status ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'
               )}
             >
               {EMPLOYMENT_STATUS_OPTIONS.map((opt) => (
@@ -423,7 +423,7 @@ function CreateEmployeeFormBody({
               id="employee-start-date"
               type="date"
               {...register('start_date')}
-              className={errors.start_date ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'}
+              className={errors.start_date ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'}
             />
             {errors.start_date && (
               <p className="ml-2 text-xs text-destructive">{errors.start_date.message}</p>
@@ -438,7 +438,7 @@ function CreateEmployeeFormBody({
                 id="employee-end-date"
                 type="date"
                 {...register('end_date')}
-                className={errors.end_date ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'}
+                className={errors.end_date ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'}
               />
               {errors.end_date && (
                 <p className="ml-2 text-xs text-destructive">{errors.end_date.message}</p>
@@ -458,7 +458,7 @@ function CreateEmployeeFormBody({
               onChange={(e) => handleDepartmentChange(e.target.value)}
               className={cn(
                 'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm',
-                errors.department_id ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
+                errors.department_id ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'
               )}
             >
               <option value="">Select department</option>
@@ -488,7 +488,7 @@ function CreateEmployeeFormBody({
               disabled={!departmentId || availableJobRoles.length === 0}
               className={cn(
                 'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm disabled:opacity-50',
-                errors.job_role_id ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
+                errors.job_role_id ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'
               )}
             >
               <option value="">
@@ -528,7 +528,7 @@ function CreateEmployeeFormBody({
                 role="combobox"
                 aria-expanded={managerOpen}
                 className={cn(
-                  'h-9 w-full justify-between font-normal focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!',
+                  'h-9 w-full justify-between font-normal focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!',
                   !selectedManager && 'text-muted-foreground'
                 )}
               >
@@ -544,7 +544,7 @@ function CreateEmployeeFormBody({
                   <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                   <Input
                     placeholder="Search by name or job role..."
-                    className="h-8 pl-8 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+                    className="h-8 pl-8 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
                     value={managerSearch}
                     onChange={(e) => setManagerSearch(e.target.value)}
                     onKeyDown={(e) => e.stopPropagation()}
@@ -628,8 +628,8 @@ function CreateEmployeeFormBody({
             className={cn(
               'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm',
               errors.report_location
-                ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
-                : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
+                ? 'border-destructive focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'
+                : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'
             )}
           >
             <option value="">None</option>

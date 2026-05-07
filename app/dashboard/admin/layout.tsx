@@ -55,7 +55,7 @@ export default async function AdminDashboardLayout({
     <SidebarProvider>
       <AdminSidebar />
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 sticky top-0 bg-white z-10">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 sticky top-0 z-10 bg-background">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1" />
             <span className="text-sm font-medium text-muted-foreground">
@@ -85,7 +85,7 @@ export default async function AdminDashboardLayout({
             </DropdownMenu>
           </div>
         </header>
-        <div className="flex flex-1 flex-col">{children}</div>
+        <div className="flex flex-1 flex-col bg-background">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   )

@@ -90,10 +90,10 @@ export function AdminSidebar() {
   }
 
   return (
-    <Sidebar>
+    <Sidebar className='admin-sidebar'>
       <SidebarHeader>
         <SidebarGroupLabel className="px-2 text-base font-semibold">
-          Admin Panel
+          DASHR
         </SidebarGroupLabel>
       </SidebarHeader>
       <SidebarContent>

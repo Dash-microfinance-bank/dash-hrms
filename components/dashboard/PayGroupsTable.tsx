@@ -35,38 +35,87 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import type { SalaryComponentRow } from '@/lib/data/salary-components'
-import { CreateAllowanceModal } from '@/components/dashboard/CreateAllowanceModal'
-import { EditAllowanceModal } from '@/components/dashboard/EditAllowanceModal'
-import { DeleteAllowanceConfirmModal } from '@/components/dashboard/DeleteAllowanceConfirmModal'
-import { DisableAllowanceConfirmModal } from '@/components/dashboard/DisableAllowanceConfirmModal'
-import { activateAllowance } from '@/lib/actions/salary-components'
+import type { PayGroupRow } from '@/lib/data/pay-groups'
+import { CreatePayGroupModal } from '@/components/dashboard/CreatePayGroupModal'
+import { EditPayGroupModal } from '@/components/dashboard/EditPayGroupModal'
+import { DeletePayGroupConfirmModal } from '@/components/dashboard/DeletePayGroupConfirmModal'
+import { DisablePayGroupConfirmModal } from '@/components/dashboard/DisablePayGroupConfirmModal'
+import { activatePayGroup } from '@/lib/actions/pay-groups'
 import { toast } from 'sonner'
 
-type AllowancesTableProps = {
-  data: SalaryComponentRow[]
+type PayGroupsTableProps = {
+  data: PayGroupRow[]
 }
 
-export function AllowancesTable({ data }: AllowancesTableProps) {
+const weekdaysMon1Sun7 = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+function ordinalSuffix(day: number): string {
+  if (day >= 11 && day <= 13) return `${day}th`
+  const rem = day % 10
+  if (rem === 1) return `${day}st`
+  if (rem === 2) return `${day}nd`
+  if (rem === 3) return `${day}rd`
+  return `${day}th`
+}
+
+function formatFrequency(value: PayGroupRow['pay_frequency']): string {
+  switch (value) {
+    case 'DAILY':
+      return 'daily'
+    case 'WEEKLY':
+      return 'weekly'
+    case 'BI_WEEKLY':
+      return 'bi-weekly'
+    case 'MONTHLY':
+      return 'monthly'
+    default:
+      return '—'
+  }
+}
+
+function formatPayDay(row: PayGroupRow): string {
+  if (row.pay_day_type === 'LAST_WORKING_DAY') return 'Last working day'
+
+  if (row.pay_frequency === 'MONTHLY' && row.pay_day && row.pay_day >= 1 && row.pay_day <= 31) {
+    return `${ordinalSuffix(row.pay_day)} (monthly)`
+  }
+
+  if (
+    (row.pay_frequency === 'WEEKLY' || row.pay_frequency === 'BI_WEEKLY') &&
+    row.pay_day &&
+    row.pay_day >= 1 &&
+    row.pay_day <= 7
+  ) {
+    const name = weekdaysMon1Sun7[row.pay_day - 1]
+    if (row.pay_frequency === 'BI_WEEKLY' && row.anchor_date) {
+      return `${name} (${row.anchor_date})`
+    }
+    return name
+  }
+
+  return '—'
+}
+
+export function PayGroupsTable({ data }: PayGroupsTableProps) {
   const router = useRouter()
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
-  const [editingAllowance, setEditingAllowance] = useState<SalaryComponentRow | null>(null)
-  const [deletingAllowance, setDeletingAllowance] = useState<SalaryComponentRow | null>(null)
-  const [disablingAllowance, setDisablingAllowance] = useState<SalaryComponentRow | null>(null)
+  const [editingPayGroup, setEditingPayGroup] = useState<PayGroupRow | null>(null)
+  const [deletingPayGroup, setDeletingPayGroup] = useState<PayGroupRow | null>(null)
+  const [disablingPayGroup, setDisablingPayGroup] = useState<PayGroupRow | null>(null)
 
-  const handleActivate = useCallback(async (allowance: SalaryComponentRow) => {
-    const result = await activateAllowance(allowance.id)
+  const handleActivate = useCallback(async (payGroup: PayGroupRow) => {
+    const result = await activatePayGroup(payGroup.id)
     if (result.success) {
-      toast.success('Allowance activated')
+      toast.success('Pay group activated')
       router.refresh()
     } else {
       toast.error(result.error)
     }
   }, [router])
 
-  const columns = useMemo<ColumnDef<SalaryComponentRow>[]>(
+  const columns = useMemo<ColumnDef<PayGroupRow>[]>(
     () => [
       {
         id: 'sn',
@@ -76,7 +125,7 @@ export function AllowancesTable({ data }: AllowancesTableProps) {
           const position = table.getRowModel().rows.findIndex((r) => r.id === row.id)
           return pageIndex * pageSize + position + 1
         },
-        size: 60,
+        size: 56,
         enableSorting: false,
       },
       {
@@ -101,42 +150,48 @@ export function AllowancesTable({ data }: AllowancesTableProps) {
         cell: ({ row }) => <span className="font-medium">{row.original.name ?? '—'}</span>,
       },
       {
-        id: 'code',
-        header: 'Code',
-        accessorFn: (row) => row.code ?? '',
-        cell: ({ row }) => row.original.code ?? '—',
+        id: 'frequency',
+        header: 'Frequency',
+        accessorFn: (row) => formatFrequency(row.pay_frequency),
+        cell: ({ row }) => formatFrequency(row.original.pay_frequency),
       },
       {
-        id: 'calculation',
-        header: 'Calculation',
-        accessorFn: (row) => row.calculation_type ?? '',
-        cell: ({ row }) => (row.original.calculation_type ?? '').toLowerCase() || '—',
+        id: 'pay_day',
+        header: 'Pay Day',
+        accessorFn: (row) => formatPayDay(row),
+        cell: ({ row }) => formatPayDay(row.original),
       },
       {
-        id: 'based_on',
-        header: 'Based On',
-        accessorFn: (row) => row.calculation_base ?? '',
-        cell: ({ row }) => row.original.calculation_base ?? '—',
+        id: 'currency',
+        header: 'Currency',
+        accessorFn: (row) => row.currency ?? 'NGN',
+        cell: ({ row }) => row.original.currency ?? 'NGN',
       },
       {
-        id: 'taxable',
-        header: 'Taxable',
-        accessorFn: (row) => (row.is_taxable ? 'Yes' : 'No'),
-        cell: ({ row }) => (row.original.is_taxable ? 'Yes' : 'No'),
+        id: 'employees',
+        header: 'Employees',
+        accessorFn: (row) => row.employees_count,
+        cell: ({ row }) => row.original.employees_count,
+      },
+      {
+        id: 'auto_run',
+        header: 'Auto Run',
+        accessorFn: (row) => (row.auto_generate_payroll ? 'Yes' : 'No'),
+        cell: ({ row }) => (row.original.auto_generate_payroll ? 'Yes' : 'No'),
       },
       {
         id: 'status',
         header: 'Status',
-        accessorFn: (row) => (row.is_active ? 'Active' : 'Disabled'),
+        accessorFn: (row) => (row.active ? 'Active' : 'Disabled'),
         cell: ({ row }) => (
-          <span className={row.original.is_active ? 'text-emerald-600' : 'text-muted-foreground'}>
-            {row.original.is_active ? 'Active' : 'Disabled'}
+          <span className={row.original.active ? 'text-emerald-600' : 'text-muted-foreground'}>
+            {row.original.active ? 'Active' : 'Disabled'}
           </span>
         ),
       },
       {
         id: 'actions',
-        header: 'Actions',
+        header: 'Action',
         enableSorting: false,
         cell: ({ row }) => (
           <DropdownMenu>
@@ -147,17 +202,11 @@ export function AllowancesTable({ data }: AllowancesTableProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setEditingAllowance(row.original)}>
+              <DropdownMenuItem onClick={() => setEditingPayGroup(row.original)}>
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => setDeletingAllowance(row.original)}
-              >
-                Delete
-              </DropdownMenuItem>
-              {row.original.is_active ? (
-                <DropdownMenuItem onClick={() => setDisablingAllowance(row.original)}>
+              {row.original.active ? (
+                <DropdownMenuItem onClick={() => setDisablingPayGroup(row.original)}>
                   Disable
                 </DropdownMenuItem>
               ) : (
@@ -165,10 +214,16 @@ export function AllowancesTable({ data }: AllowancesTableProps) {
                   Activate
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => setDeletingPayGroup(row.original)}
+              >
+                Delete
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ),
-        size: 80,
+        size: 72,
       },
     ],
     [handleActivate]
@@ -177,29 +232,19 @@ export function AllowancesTable({ data }: AllowancesTableProps) {
   const table = useReactTable({
     data,
     columns,
-    state: {
-      sorting,
-      globalFilter,
-    },
+    state: { sorting, globalFilter },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
+    initialState: { pagination: { pageSize: 10 } },
   })
 
   const rows = table.getRowModel().rows
   const isEmpty = data.length === 0
-
-  const handleCreateSuccess = () => {
-    router.refresh()
-  }
+  const handleSuccess = () => router.refresh()
 
   return (
     <div className="space-y-4 bg-card py-3 px-3 rounded-md">
@@ -207,7 +252,7 @@ export function AllowancesTable({ data }: AllowancesTableProps) {
         <div className="relative w-full sm:w-72">
           <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
           <Input
-            placeholder="Search allowances..."
+            placeholder="Search pay groups..."
             className="pl-8 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary!"
             value={globalFilter ?? ''}
             onChange={(event) => table.setGlobalFilter(event.target.value)}
@@ -216,7 +261,7 @@ export function AllowancesTable({ data }: AllowancesTableProps) {
         <Button onClick={() => setCreateOpen(true)}>Create</Button>
       </div>
 
-      <div className="rounded-md overflow-x-auto">
+      <div className="rounded-md borde overflow-x-auto">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -234,8 +279,8 @@ export function AllowancesTable({ data }: AllowancesTableProps) {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                  {isEmpty ? 'No allowances found.' : 'No allowances match your search.'}
+                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                  {isEmpty ? 'No pay groups found.' : 'No pay groups match your search.'}
                 </TableCell>
               </TableRow>
             ) : (
@@ -253,36 +298,32 @@ export function AllowancesTable({ data }: AllowancesTableProps) {
         </Table>
       </div>
 
-      <CreateAllowanceModal
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onSuccess={handleCreateSuccess}
-      />
-      {editingAllowance ? (
-        <EditAllowanceModal
-          allowance={editingAllowance}
-          open={!!editingAllowance}
+      <CreatePayGroupModal open={createOpen} onOpenChange={setCreateOpen} onSuccess={handleSuccess} />
+      {editingPayGroup ? (
+        <EditPayGroupModal
+          payGroup={editingPayGroup}
+          open={!!editingPayGroup}
           onOpenChange={(open) => {
-            if (!open) setEditingAllowance(null)
+            if (!open) setEditingPayGroup(null)
           }}
-          onSuccess={handleCreateSuccess}
+          onSuccess={handleSuccess}
         />
       ) : null}
-      <DeleteAllowanceConfirmModal
-        allowance={deletingAllowance}
-        open={!!deletingAllowance}
+      <DeletePayGroupConfirmModal
+        payGroup={deletingPayGroup}
+        open={!!deletingPayGroup}
         onOpenChange={(open) => {
-          if (!open) setDeletingAllowance(null)
+          if (!open) setDeletingPayGroup(null)
         }}
-        onSuccess={handleCreateSuccess}
+        onSuccess={handleSuccess}
       />
-      <DisableAllowanceConfirmModal
-        allowance={disablingAllowance}
-        open={!!disablingAllowance}
+      <DisablePayGroupConfirmModal
+        payGroup={disablingPayGroup}
+        open={!!disablingPayGroup}
         onOpenChange={(open) => {
-          if (!open) setDisablingAllowance(null)
+          if (!open) setDisablingPayGroup(null)
         }}
-        onSuccess={handleCreateSuccess}
+        onSuccess={handleSuccess}
       />
     </div>
   )

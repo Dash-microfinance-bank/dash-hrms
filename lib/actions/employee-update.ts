@@ -71,6 +71,10 @@ const CARD_FIELDS: Record<string, CardDef> = {
       'active',
     ],
   },
+  compensation: {
+    table: 'employees',
+    fields: ['pay_group', 'level', 'pay_grade', 'base_salary', 'estimated_gross_salary'],
+  },
 }
 
 // Fields in the contact card that live in the employees table
@@ -522,6 +526,135 @@ export async function updateEmployeeCard(
         const { error } = await supabase.from('employees').update(upd).eq('id', employeeId).eq('organization_id', orgId)
         if (error) return { success: false, error: error.message }
         const evts = await insertChangeEvents(supabase, orgId, employeeId, user.id, 'employees', changes)
+        allNewEvents.push(...evts)
+        Object.assign(mergedUpdated, upd)
+      }
+    }
+
+    revalidatePath('/dashboard/admin/employees')
+    return { success: true, updatedFields: mergedUpdated, newEvents: allNewEvents }
+  }
+
+  // ── Compensation card — org checks, grade-range validation, audit ────────────
+  if (card === 'compensation') {
+    const compDef = CARD_FIELDS['compensation']
+    const compFields = compDef.fields
+
+    const incoming: Record<string, unknown> = {}
+    for (const f of compFields) if (f in payload) incoming[f] = payload[f]
+
+    const payGroupId = (incoming.pay_group as string | null | undefined) || null
+    const levelId = (incoming.level as string | null | undefined) || null
+    const payGradeId = (incoming.pay_grade as string | null | undefined) || null
+
+    const baseRaw = incoming.base_salary
+    const grossRaw = incoming.estimated_gross_salary
+    const baseSalary =
+      baseRaw === null || baseRaw === undefined || baseRaw === '' || !Number.isFinite(Number(baseRaw))
+        ? null
+        : Number(baseRaw)
+    const estimatedGross =
+      grossRaw === null || grossRaw === undefined || grossRaw === '' || !Number.isFinite(Number(grossRaw))
+        ? null
+        : Number(grossRaw)
+
+    if (baseSalary !== null && baseSalary < 0) {
+      return { success: false, error: 'Base salary cannot be negative' }
+    }
+    if (estimatedGross !== null && estimatedGross < 0) {
+      return { success: false, error: 'Estimated gross salary cannot be negative' }
+    }
+    if (baseSalary !== null && estimatedGross !== null && estimatedGross <= baseSalary) {
+      return { success: false, error: 'Estimated gross salary must be greater than base salary' }
+    }
+
+    if (payGroupId) {
+      const { data: pg, error: pgError } = await supabase
+        .from('pay_groups')
+        .select('id, organization_id')
+        .eq('id', payGroupId)
+        .single()
+      if (pgError || !pg) return { success: false, error: 'Selected pay group was not found' }
+      if ((pg as { organization_id: string }).organization_id !== orgId) {
+        return { success: false, error: 'Pay group must belong to your organization' }
+      }
+    }
+
+    if (levelId) {
+      const { data: lvl, error: lvlError } = await supabase
+        .from('employee_levels')
+        .select('id, organization_id')
+        .eq('id', levelId)
+        .single()
+      if (lvlError || !lvl) return { success: false, error: 'Selected level was not found' }
+      if ((lvl as { organization_id: string }).organization_id !== orgId) {
+        return { success: false, error: 'Level must belong to your organization' }
+      }
+    }
+
+    if (payGradeId) {
+      const { data: grade, error: gradeError } = await supabase
+        .from('grades')
+        .select('id, organization_id, name, min_salary, max_salary, is_active')
+        .eq('id', payGradeId)
+        .single()
+      if (gradeError || !grade) return { success: false, error: 'Selected pay grade was not found' }
+      const g = grade as {
+        id: string
+        organization_id: string
+        name: string
+        min_salary: string | number | null
+        max_salary: string | number | null
+        is_active: boolean | null
+      }
+      if (g.organization_id !== orgId) {
+        return { success: false, error: 'Pay grade must belong to your organization' }
+      }
+      if (g.is_active === false) {
+        return { success: false, error: 'Pay grade is inactive' }
+      }
+      if (baseSalary === null) {
+        return { success: false, error: 'Base salary is required when a pay grade is selected' }
+      }
+      const min = g.min_salary !== null ? Number(g.min_salary) : null
+      const max = g.max_salary !== null ? Number(g.max_salary) : null
+      if (min !== null && Number.isFinite(min) && baseSalary < min) {
+        return { success: false, error: `Base salary must be at least ${min.toLocaleString()} for ${g.name}` }
+      }
+      if (max !== null && Number.isFinite(max) && baseSalary > max) {
+        return { success: false, error: `Base salary must be at most ${max.toLocaleString()} for ${g.name}` }
+      }
+    }
+
+    const normalised: Record<string, unknown> = {
+      pay_group: payGroupId,
+      level: levelId,
+      pay_grade: payGradeId,
+      base_salary: baseSalary,
+      estimated_gross_salary: estimatedGross,
+    }
+
+    const compPayload: Record<string, unknown> = {}
+    for (const f of compFields) if (f in incoming) compPayload[f] = normalised[f]
+
+    if (Object.keys(compPayload).length > 0) {
+      const { data: cur } = await supabase
+        .from('employees')
+        .select(compFields.join(', '))
+        .eq('id', employeeId)
+        .single()
+      const curRec = (cur ?? {}) as Record<string, unknown>
+      const compChanges = diff(curRec, compPayload, compFields)
+      if (compChanges.length > 0) {
+        const upd: Record<string, unknown> = {}
+        for (const c of compChanges) upd[c.field] = c.newVal
+        const { error } = await supabase
+          .from('employees')
+          .update(upd)
+          .eq('id', employeeId)
+          .eq('organization_id', orgId)
+        if (error) return { success: false, error: error.message }
+        const evts = await insertChangeEvents(supabase, orgId, employeeId, user.id, 'employees', compChanges)
         allNewEvents.push(...evts)
         Object.assign(mergedUpdated, upd)
       }

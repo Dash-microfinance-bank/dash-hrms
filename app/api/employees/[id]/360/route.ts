@@ -41,6 +41,17 @@ export interface Employee360Employee {
   manager_name: string | null
   location_address: string | null
   avatar_url: string | null
+  pay_group: string | null
+  level: string | null
+  pay_grade: string | null
+  base_salary: number | null
+  estimated_gross_salary: number | null
+  pay_group_name: string | null
+  level_name: string | null
+  pay_grade_name: string | null
+  pay_grade_currency: string | null
+  pay_grade_min_salary: number | null
+  pay_grade_max_salary: number | null
 }
 
 export interface Employee360Biodata {
@@ -160,6 +171,11 @@ type EmployeeRowFor360 = {
   report_location: string | null
   auth_id: string | null
   avatar_url: string | null
+  pay_group: string | null
+  level: string | null
+  pay_grade: string | null
+  base_salary: string | number | null
+  estimated_gross_salary: string | number | null
 }
 
 export interface Employee360Response {
@@ -219,7 +235,7 @@ export async function GET(
       supabase
         .from('employees')
         .select(
-          'id, organization_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id, report_location, auth_id, avatar_url'
+          'id, organization_id, staff_id, email, phone, contract_type, start_date, end_date, employment_status, active, created_at, department_id, job_role_id, manager_id, report_location, auth_id, avatar_url, pay_group, level, pay_grade, base_salary, estimated_gross_salary'
         )
         .eq('id', employeeId)
         .eq('organization_id', orgId)
@@ -304,8 +320,8 @@ export async function GET(
 
     const emp = empResult.data as EmployeeRowFor360
 
-    // ── Enrich: department, job role, location, avatar ────────────────────────
-    const [deptResult, roleResult, locationResult] = await Promise.all([
+    // ── Enrich: department, job role, location, avatar, compensation refs ─────
+    const [deptResult, roleResult, locationResult, payGroupResult, levelResult, gradeResult] = await Promise.all([
       emp.department_id
         ? supabase.from('departments').select('name, code').eq('id', emp.department_id).single()
         : Promise.resolve({ data: null, error: null }),
@@ -315,12 +331,36 @@ export async function GET(
       emp.report_location
         ? supabase.from('organization_location').select('address').eq('id', emp.report_location).single()
         : Promise.resolve({ data: null, error: null }),
+      emp.pay_group
+        ? supabase.from('pay_groups').select('name').eq('id', emp.pay_group).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      emp.level
+        ? supabase.from('employee_levels').select('name').eq('id', emp.level).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      emp.pay_grade
+        ? supabase
+            .from('grades')
+            .select('name, currency, min_salary, max_salary')
+            .eq('id', emp.pay_grade)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ])
 
     const dept = deptResult.data as { name: string; code: string | null } | null
     const role = roleResult.data as { title: string; code: string | null } | null
     const location = locationResult.data as { address: string | null } | null
     const avatarUrl = (emp.avatar_url ?? null) as string | null
+    const payGroup = payGroupResult.data as { name: string | null } | null
+    const employeeLevel = levelResult.data as { name: string | null } | null
+    const grade = gradeResult.data as
+      | { name: string | null; currency: string | null; min_salary: string | number | null; max_salary: string | number | null }
+      | null
+
+    const numOrNull = (v: string | number | null | undefined): number | null => {
+      if (v === null || v === undefined) return null
+      const n = typeof v === 'number' ? v : Number(v)
+      return Number.isFinite(n) ? n : null
+    }
 
     // Manager name — employees.manager_id is now employees.id (no auth_id hop needed)
     let managerName: string | null = null
@@ -379,6 +419,17 @@ export async function GET(
       manager_name: managerName,
       location_address: location?.address ?? null,
       avatar_url: avatarUrl,
+      pay_group: (emp.pay_group ?? null) as string | null,
+      level: (emp.level ?? null) as string | null,
+      pay_grade: (emp.pay_grade ?? null) as string | null,
+      base_salary: numOrNull(emp.base_salary),
+      estimated_gross_salary: numOrNull(emp.estimated_gross_salary),
+      pay_group_name: payGroup?.name ?? null,
+      level_name: employeeLevel?.name ?? null,
+      pay_grade_name: grade?.name ?? null,
+      pay_grade_currency: grade?.currency ?? null,
+      pay_grade_min_salary: numOrNull(grade?.min_salary ?? null),
+      pay_grade_max_salary: numOrNull(grade?.max_salary ?? null),
     }
 
     const rawBio = (biodataResult.data ?? {}) as Record<string, unknown>

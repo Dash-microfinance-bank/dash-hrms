@@ -28,6 +28,9 @@ import type { DepartmentRow } from '@/lib/data/departments'
 import type { JobRoleRow } from '@/lib/data/job-roles'
 import type { LocationRow } from '@/lib/data/locations'
 import type { ManagerStats } from '@/lib/data/employees'
+import type { PayGroupRow } from '@/lib/data/pay-groups'
+import type { EmployeeLevelRow } from '@/lib/data/employee-levels'
+import type { GradeRow } from '@/lib/data/grades'
 import type { LineManagerOption } from '@/components/dashboard/CreateEmployeeModal'
 import { createSingleEmployee } from '@/lib/actions/employees'
 
@@ -52,59 +55,132 @@ const EMPLOYMENT_STATUS_OPTIONS = [
   { value: 'confirmed', label: 'Confirmed' },
 ] as const
 
-const employeeSchema = z
-  .object({
-    staff_id: z.string().min(1, 'Staff ID is required').max(50, 'Staff ID is too long').trim(),
-    firstname: z.string().min(1, 'First name is required').max(100, 'First name is too long').trim(),
-    lastname: z.string().min(1, 'Last name is required').max(100, 'Last name is too long').trim(),
-    gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say'], { error: 'Gender is required' }),
-    email: z.string().min(1, 'Email is required').email('Enter a valid email').trim(),
-    phone: z.string().min(1, 'Phone number is required').max(20, 'Phone number is too long').trim(),
-    contract_type: z.enum(
-      ['permanent', 'part_time', 'fixed_term', 'temporary', 'intern', 'contractor'],
-      { error: 'Contract type is required' }
-    ),
-    start_date: z.string().min(1, 'Start date is required'),
-    end_date: z.string().optional(),
-    employment_status: z.enum(['probation', 'confirmed'], { error: 'Employment status is required' }),
-    department_id: z.string().min(1, 'Department is required'),
-    job_role_id: z.string().min(1, 'Job role is required'),
-    manager_id: z.string().optional(),
-    report_location: z.string().optional().or(z.literal('')),
-    create_user_account: z.boolean(),
-  })
-  .refine(
-    (data) => {
-      if (data.contract_type === 'permanent' || data.contract_type === 'part_time') {
-        return !data.end_date || data.end_date.trim() === ''
-      }
-      return !!data.end_date && data.end_date.trim() !== ''
-    },
-    { message: 'End date is required for fixed-term, temporary, intern, and contractor.', path: ['end_date'] }
-  )
-  .refine(
-    (data) => {
-      if (data.end_date && data.end_date.trim() !== '' && data.start_date) {
-        return new Date(data.start_date) < new Date(data.end_date)
-      }
-      return true
-    },
-    { message: 'End date must be after start date', path: ['end_date'] }
-  )
-  .refine(
-    (data) => {
-      if (!data.create_user_account) return true
-      return (
-        (data.firstname ?? '').trim().length > 0 &&
-        (data.lastname ?? '').trim().length > 0 &&
-        (data.email ?? '').trim().length > 0 &&
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((data.email ?? '').trim())
-      )
-    },
-    { message: 'First name, last name, and a valid email are required to send login details.', path: ['email'] }
-  )
+const buildEmployeeSchema = (grades: GradeRow[]) =>
+  z
+    .object({
+      staff_id: z.string().min(1, 'Staff ID is required').max(50, 'Staff ID is too long').trim(),
+      firstname: z.string().min(1, 'First name is required').max(100, 'First name is too long').trim(),
+      lastname: z.string().min(1, 'Last name is required').max(100, 'Last name is too long').trim(),
+      gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say'], { error: 'Gender is required' }),
+      email: z.string().min(1, 'Email is required').email('Enter a valid email').trim(),
+      phone: z.string().min(1, 'Phone number is required').max(20, 'Phone number is too long').trim(),
+      contract_type: z.enum(
+        ['permanent', 'part_time', 'fixed_term', 'temporary', 'intern', 'contractor'],
+        { error: 'Contract type is required' }
+      ),
+      start_date: z.string().min(1, 'Start date is required'),
+      end_date: z.string().optional(),
+      employment_status: z.enum(['probation', 'confirmed'], { error: 'Employment status is required' }),
+      department_id: z.string().min(1, 'Department is required'),
+      job_role_id: z.string().min(1, 'Job role is required'),
+      manager_id: z.string().optional(),
+      report_location: z.string().optional().or(z.literal('')),
+      pay_group_id: z.string().optional(),
+      level_id: z.string().optional(),
+      pay_grade_id: z.string().optional(),
+      base_salary: z.string().optional(),
+      estimated_gross_salary: z.string().optional(),
+      create_user_account: z.boolean(),
+    })
+    .refine(
+      (data) => {
+        if (data.contract_type === 'permanent' || data.contract_type === 'part_time') {
+          return !data.end_date || data.end_date.trim() === ''
+        }
+        return !!data.end_date && data.end_date.trim() !== ''
+      },
+      { message: 'End date is required for fixed-term, temporary, intern, and contractor.', path: ['end_date'] }
+    )
+    .refine(
+      (data) => {
+        if (data.end_date && data.end_date.trim() !== '' && data.start_date) {
+          return new Date(data.start_date) < new Date(data.end_date)
+        }
+        return true
+      },
+      { message: 'End date must be after start date', path: ['end_date'] }
+    )
+    .refine(
+      (data) => {
+        if (!data.create_user_account) return true
+        return (
+          (data.firstname ?? '').trim().length > 0 &&
+          (data.lastname ?? '').trim().length > 0 &&
+          (data.email ?? '').trim().length > 0 &&
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((data.email ?? '').trim())
+        )
+      },
+      { message: 'First name, last name, and a valid email are required to send login details.', path: ['email'] }
+    )
+    .superRefine((data, ctx) => {
+      const baseRaw = (data.base_salary ?? '').trim()
+      const grossRaw = (data.estimated_gross_salary ?? '').trim()
+      const gradeId = (data.pay_grade_id ?? '').trim()
 
-type FormValues = z.infer<typeof employeeSchema>
+      const baseNum = baseRaw === '' ? null : Number(baseRaw)
+      const grossNum = grossRaw === '' ? null : Number(grossRaw)
+
+      if (baseNum !== null && (!Number.isFinite(baseNum) || baseNum < 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Base salary must be a non-negative number',
+          path: ['base_salary'],
+        })
+      }
+      if (grossNum !== null && (!Number.isFinite(grossNum) || grossNum < 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Estimated gross salary must be a non-negative number',
+          path: ['estimated_gross_salary'],
+        })
+      }
+
+      if (gradeId !== '') {
+        if (baseNum === null || !Number.isFinite(baseNum)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Base salary is required when a pay grade is selected',
+            path: ['base_salary'],
+          })
+        } else {
+          const grade = grades.find((g) => g.id === gradeId)
+          if (grade) {
+            const min = grade.min_salary !== null ? Number(grade.min_salary) : null
+            const max = grade.max_salary !== null ? Number(grade.max_salary) : null
+            if (min !== null && Number.isFinite(min) && baseNum < min) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Base salary must be at least ${min.toLocaleString()} for ${grade.name}`,
+                path: ['base_salary'],
+              })
+            }
+            if (max !== null && Number.isFinite(max) && baseNum > max) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Base salary must be at most ${max.toLocaleString()} for ${grade.name}`,
+                path: ['base_salary'],
+              })
+            }
+          }
+        }
+      }
+
+      if (
+        baseNum !== null &&
+        Number.isFinite(baseNum) &&
+        grossNum !== null &&
+        Number.isFinite(grossNum) &&
+        grossNum <= baseNum
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Estimated gross salary must be greater than base salary',
+          path: ['estimated_gross_salary'],
+        })
+      }
+    })
+
+type FormValues = z.infer<ReturnType<typeof buildEmployeeSchema>>
 
 type SingleEmployeeUploadFormProps = {
   departments: DepartmentRow[]
@@ -112,11 +188,14 @@ type SingleEmployeeUploadFormProps = {
   lineManagerOptions: LineManagerOption[]
   managerStats: ManagerStats
   locations: LocationRow[]
+  payGroups: PayGroupRow[]
+  levels: EmployeeLevelRow[]
+  grades: GradeRow[]
 }
 
 const inputErrorClass =
-  'border-destructive focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-none focus:border-primary'
-const inputBaseClass = 'focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-none focus:border-primary'
+  'border-destructive focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-hidden focus:border-primary'
+const inputBaseClass = 'focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-hidden focus:border-primary'
 
 export function SingleEmployeeUploadForm({
   departments,
@@ -124,10 +203,15 @@ export function SingleEmployeeUploadForm({
   lineManagerOptions,
   managerStats,
   locations,
+  payGroups,
+  levels,
+  grades,
 }: SingleEmployeeUploadFormProps) {
   const router = useRouter()
   const [managerSearch, setManagerSearch] = useState('')
   const [managerOpen, setManagerOpen] = useState(false)
+
+  const employeeSchema = useMemo(() => buildEmployeeSchema(grades), [grades])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(employeeSchema),
@@ -146,6 +230,11 @@ export function SingleEmployeeUploadForm({
       job_role_id: '',
       manager_id: '',
       report_location: '',
+      pay_group_id: '',
+      level_id: '',
+      pay_grade_id: '',
+      base_salary: '',
+      estimated_gross_salary: '',
       create_user_account: false,
     },
   })
@@ -154,6 +243,7 @@ export function SingleEmployeeUploadForm({
   const contractType = useWatch({ control, name: 'contract_type', defaultValue: 'permanent' })
   const departmentId = useWatch({ control, name: 'department_id', defaultValue: '' })
   const managerId = useWatch({ control, name: 'manager_id', defaultValue: '' })
+  const payGradeId = useWatch({ control, name: 'pay_grade_id', defaultValue: '' })
   const handleDepartmentChange = (value: string) => {
     setValue('department_id', value)
     setValue('job_role_id', '')
@@ -161,6 +251,29 @@ export function SingleEmployeeUploadForm({
 
   const availableJobRoles = jobRoles.filter((jr) => jr.department_id === departmentId)
   const activeDepartments = departments.filter((d) => d.is_active)
+
+  const selectedGrade = useMemo(
+    () => grades.find((g) => g.id === payGradeId) ?? null,
+    [grades, payGradeId]
+  )
+  const selectedGradeMin = selectedGrade?.min_salary !== null && selectedGrade?.min_salary !== undefined
+    ? Number(selectedGrade.min_salary)
+    : null
+  const selectedGradeMax = selectedGrade?.max_salary !== null && selectedGrade?.max_salary !== undefined
+    ? Number(selectedGrade.max_salary)
+    : null
+  const formatCurrency = (n: number, currency: string | null | undefined) => {
+    const safeCurrency = (currency ?? 'NGN').toUpperCase()
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: safeCurrency,
+        maximumFractionDigits: 0,
+      }).format(n)
+    } catch {
+      return `${n.toLocaleString()} ${safeCurrency}`
+    }
+  }
 
   const availableManagers = useMemo(
     () => lineManagerOptions.filter((m) => !managerStats.excludedIds.includes(m.employeeId)),
@@ -183,6 +296,32 @@ export function SingleEmployeeUploadForm({
   }, [managerSearch, availableManagers, topManagers])
 
   const onSubmit = async (values: FormValues) => {
+    const baseRaw = (values.base_salary ?? '').trim()
+    const grossRaw = (values.estimated_gross_salary ?? '').trim()
+    const baseNum = baseRaw === '' ? null : Number(baseRaw)
+    const grossNum = grossRaw === '' ? null : Number(grossRaw)
+    const baseSalary = baseNum !== null && Number.isFinite(baseNum) ? baseNum : null
+    const estimatedGross = grossNum !== null && Number.isFinite(grossNum) ? grossNum : null
+
+    let resolvedPayGradeId: string | null = (values.pay_grade_id ?? '').trim() || null
+    if (!resolvedPayGradeId && baseSalary !== null) {
+      const candidates = grades
+        .filter((g) => {
+          const min = g.min_salary !== null ? Number(g.min_salary) : null
+          const max = g.max_salary !== null ? Number(g.max_salary) : null
+          const minOk = min === null || !Number.isFinite(min) || baseSalary >= min
+          const maxOk = max === null || !Number.isFinite(max) || baseSalary <= max
+          return minOk && maxOk
+        })
+        .sort((a, b) => {
+          const al = a.level ?? Number.POSITIVE_INFINITY
+          const bl = b.level ?? Number.POSITIVE_INFINITY
+          if (al !== bl) return al - bl
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        })
+      resolvedPayGradeId = candidates[0]?.id ?? null
+    }
+
     const result = await createSingleEmployee({
       staff_id: values.staff_id,
       firstname: values.firstname,
@@ -198,6 +337,11 @@ export function SingleEmployeeUploadForm({
       job_role_id: values.job_role_id,
       manager_id: values.manager_id || null,
       report_location: values.report_location || null,
+      pay_group: (values.pay_group_id ?? '').trim() || null,
+      level: (values.level_id ?? '').trim() || null,
+      pay_grade: resolvedPayGradeId,
+      base_salary: baseSalary,
+      estimated_gross_salary: estimatedGross,
       create_user_account: values.create_user_account,
     })
 
@@ -285,7 +429,7 @@ export function SingleEmployeeUploadForm({
                 id="gender"
                 {...register('gender')}
                 className={cn(
-                  'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-none focus:border-primary',
+                  'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-hidden focus:border-primary',
                   errors.gender ? 'border-destructive' : ''
                 )}
               >
@@ -327,7 +471,7 @@ export function SingleEmployeeUploadForm({
                 id="contract_type"
                 {...register('contract_type')}
                 className={cn(
-                  'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-none focus:border-primary',
+                  'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-hidden focus:border-primary',
                   errors.contract_type ? 'border-destructive' : ''
                 )}
               >
@@ -345,7 +489,7 @@ export function SingleEmployeeUploadForm({
                 id="employment_status"
                 {...register('employment_status')}
                 className={cn(
-                  'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-none focus:border-primary',
+                  'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-hidden focus:border-primary',
                   errors.employment_status ? 'border-destructive' : ''
                 )}
               >
@@ -394,7 +538,7 @@ export function SingleEmployeeUploadForm({
                 value={departmentId}
                 onChange={(e) => handleDepartmentChange(e.target.value)}
                 className={cn(
-                  'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-none focus:border-primary',
+                  'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-hidden focus:border-primary',
                   errors.department_id ? 'border-destructive' : ''
                 )}
               >
@@ -416,7 +560,7 @@ export function SingleEmployeeUploadForm({
                 {...register('job_role_id')}
                 disabled={!departmentId || availableJobRoles.length === 0}
                 className={cn(
-                  'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm disabled:opacity-50 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-none focus:border-primary',
+                  'h-9 w-full rounded-md border bg-background px-3 py-1 text-sm disabled:opacity-50 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-hidden focus:border-primary',
                   errors.job_role_id ? 'border-destructive' : ''
                 )}
               >
@@ -507,7 +651,7 @@ export function SingleEmployeeUploadForm({
             <select
               id="report_location"
               {...register('report_location')}
-              className="h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-none focus:border-primary"
+              className="h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-hidden focus:border-primary"
             >
               <option value="">None</option>
               {locations.map((loc) => {
@@ -521,7 +665,135 @@ export function SingleEmployeeUploadForm({
         </CardContent>
       </Card>
 
-      {/* Card 3: User account (optional) */}
+      {/* Card 3: Compensation */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Compensation</CardTitle>
+          <CardDescription>
+            Pay group, level, grade, and salary. All fields are optional &mdash; a matching pay grade will be auto-selected from the base salary if you leave it blank.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="pay_group_id">Pay group</Label>
+              <select
+                id="pay_group_id"
+                {...register('pay_group_id')}
+                className="h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-hidden focus:border-primary"
+              >
+                <option value="">None</option>
+                {payGroups.map((pg) => (
+                  <option key={pg.id} value={pg.id}>
+                    {pg.name ?? `Pay group ${pg.id.slice(0, 8)}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="level_id">Level</Label>
+              <select
+                id="level_id"
+                {...register('level_id')}
+                className="h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-hidden focus:border-primary"
+              >
+                <option value="">None</option>
+                {levels.map((lvl) => (
+                  <option key={lvl.id} value={lvl.id}>
+                    {lvl.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="pay_grade_id">Pay grade</Label>
+              <select
+                id="pay_grade_id"
+                {...register('pay_grade_id')}
+                className="h-9 w-full rounded-md border bg-background px-3 py-1 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-primary outline-hidden focus:border-primary"
+              >
+                <option value="">Auto-select from base salary</option>
+                {grades.map((g) => {
+                  const min = g.min_salary !== null ? Number(g.min_salary) : null
+                  const max = g.max_salary !== null ? Number(g.max_salary) : null
+                  const range =
+                    min !== null && max !== null && Number.isFinite(min) && Number.isFinite(max)
+                      ? `${formatCurrency(min, g.currency)} – ${formatCurrency(max, g.currency)}`
+                      : null
+                  return (
+                    <option key={g.id} value={g.id}>
+                      {range ? `${g.name} (${range})` : g.name}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="base_salary">
+                Base salary
+                {selectedGrade ? <span className="text-destructive"> *</span> : null}
+              </Label>
+              <Input
+                id="base_salary"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min={selectedGradeMin !== null && Number.isFinite(selectedGradeMin) ? selectedGradeMin : undefined}
+                max={selectedGradeMax !== null && Number.isFinite(selectedGradeMax) ? selectedGradeMax : undefined}
+                placeholder={
+                  selectedGradeMin !== null && Number.isFinite(selectedGradeMin)
+                    ? `e.g. ${selectedGradeMin.toLocaleString()}`
+                    : 'e.g. 250000'
+                }
+                {...register('base_salary')}
+                className={errors.base_salary ? inputErrorClass : inputBaseClass}
+              />
+              {selectedGrade && (selectedGradeMin !== null || selectedGradeMax !== null) && (
+                <p className="text-xs text-muted-foreground">
+                  Allowed range:{' '}
+                  {selectedGradeMin !== null && Number.isFinite(selectedGradeMin)
+                    ? formatCurrency(selectedGradeMin, selectedGrade.currency)
+                    : '—'}
+                  {' – '}
+                  {selectedGradeMax !== null && Number.isFinite(selectedGradeMax)
+                    ? formatCurrency(selectedGradeMax, selectedGrade.currency)
+                    : '—'}
+                </p>
+              )}
+              {errors.base_salary && (
+                <p className="text-xs text-destructive">{errors.base_salary.message}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="estimated_gross_salary">Gross salary (Estimated)</Label>
+              <Input
+                id="estimated_gross_salary"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min={0}
+                placeholder="e.g. 350000"
+                {...register('estimated_gross_salary')}
+                className={errors.estimated_gross_salary ? inputErrorClass : inputBaseClass}
+              />
+              <p className="text-xs text-muted-foreground">
+                Optional. Must be greater than the base salary. Not used to compute payroll.
+              </p>
+              {errors.estimated_gross_salary && (
+                <p className="text-xs text-destructive">{errors.estimated_gross_salary.message}</p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Card 4: User account (optional) */}
       <Card>
         <CardHeader>
           <CardTitle>Login access</CardTitle>

@@ -53,6 +53,9 @@ import {
 import type { DepartmentRow } from '@/lib/data/departments'
 import type { JobRoleRow } from '@/lib/data/job-roles'
 import type { LocationRow } from '@/lib/data/locations'
+import type { PayGroupRow } from '@/lib/data/pay-groups'
+import type { EmployeeLevelRow } from '@/lib/data/employee-levels'
+import type { GradeRow } from '@/lib/data/grades'
 import type { LineManagerOption } from '@/components/dashboard/CreateEmployeeModal'
 import type { ManagerStats } from '@/lib/data/employees'
 
@@ -68,12 +71,15 @@ type Employee360ModalProps = {
   managerStats: ManagerStats
   managerHierarchy: Array<{ id: string; managerId: string | null; hasAuth: boolean }>
   locations: LocationRow[]
+  payGroups: PayGroupRow[]
+  levels: EmployeeLevelRow[]
+  grades: GradeRow[]
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const INPUT = 'h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm w-full focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
-const SELECT = 'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
+const INPUT = 'h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm w-full focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'
+const SELECT = 'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!'
 
 const GENDER_OPTIONS = [
   { value: 'male', label: 'Male' },
@@ -336,27 +342,27 @@ function IdentityCard({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <FL>Title </FL>
-            <Input value={form.title} onChange={(e) => s('title')(e.target.value)} placeholder="Mr / Mrs / Dr" className={cn(INPUT, fe.title ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')} />
+            <Input value={form.title} onChange={(e) => s('title')(e.target.value)} placeholder="Mr / Mrs / Dr" className={cn(INPUT, fe.title ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')} />
             {fe.title && <p className="ml-1 text-xs text-destructive">{fe.title}</p>}
           </div>
           <div className="space-y-1">
             <FL>First name <span className="text-destructive">*</span></FL>
-            <Input value={form.firstname} onChange={(e) => s('firstname')(e.target.value)} placeholder="First name" className={cn(INPUT, fe.firstname ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')} />
+            <Input value={form.firstname} onChange={(e) => s('firstname')(e.target.value)} placeholder="First name" className={cn(INPUT, fe.firstname ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')} />
             {fe.firstname && <p className="ml-1 text-xs text-destructive">{fe.firstname}</p>}
           </div>
           <div className="space-y-1">
             <FL>Last name <span className="text-destructive">*</span></FL>
-            <Input value={form.lastname} onChange={(e) => s('lastname')(e.target.value)} placeholder="Last name" className={cn(INPUT, fe.lastname ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')} />
+            <Input value={form.lastname} onChange={(e) => s('lastname')(e.target.value)} placeholder="Last name" className={cn(INPUT, fe.lastname ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')} />
             {fe.lastname && <p className="ml-1 text-xs text-destructive">{fe.lastname}</p>}
           </div>
           <div className="space-y-1">
             <FL>Other names </FL>
-            <Input value={form.othernames} onChange={(e) => s('othernames')(e.target.value)} placeholder="Other names" className={cn(INPUT, fe.othernames ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')} />
+            <Input value={form.othernames} onChange={(e) => s('othernames')(e.target.value)} placeholder="Other names" className={cn(INPUT, fe.othernames ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')} />
             {fe.othernames && <p className="ml-1 text-xs text-destructive">{fe.othernames}</p>}
           </div>
           <div className="space-y-1">
             <FL>Gender <span className="text-destructive">*</span></FL>
-            <select value={form.gender} onChange={(e) => s('gender')(e.target.value)} className={cn(SELECT, fe.gender ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')}>
+            <select value={form.gender} onChange={(e) => s('gender')(e.target.value)} className={cn(SELECT, fe.gender ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')}>
               <option value="">Select…</option>
               {GENDER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -364,7 +370,7 @@ function IdentityCard({
           </div>
           <div className="space-y-1">
             <FL>Date of birth <span className="text-destructive">*</span></FL>
-            <Input type="date" value={form.date_of_birth} onChange={(e) => s('date_of_birth')(e.target.value)} className={cn(INPUT, fe.date_of_birth ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')} />
+            <Input type="date" value={form.date_of_birth} onChange={(e) => s('date_of_birth')(e.target.value)} className={cn(INPUT, fe.date_of_birth ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')} />
             {fe.date_of_birth && <p className="ml-1 text-xs text-destructive">{fe.date_of_birth}</p>}
           </div>
         </div>
@@ -447,17 +453,17 @@ function OriginCard({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <FL>Place of birth</FL>
-            <Input value={form.place_of_birth} onChange={(e) => s('place_of_birth')(e.target.value)} placeholder="Where's your place of birth?" className={cn(INPUT, fe.place_of_birth ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')} />
+            <Input value={form.place_of_birth} onChange={(e) => s('place_of_birth')(e.target.value)} placeholder="Where's your place of birth?" className={cn(INPUT, fe.place_of_birth ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')} />
             {fe.place_of_birth && <p className="ml-1 text-xs text-destructive">{fe.place_of_birth}</p>}
           </div>
           <div className="space-y-1">
             <FL>LGA</FL>
-            <Input value={form.lga} onChange={(e) => s('lga')(e.target.value)} placeholder="Local government area" className={cn(INPUT, fe.lga ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')} />
+            <Input value={form.lga} onChange={(e) => s('lga')(e.target.value)} placeholder="Local government area" className={cn(INPUT, fe.lga ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')} />
             {fe.lga && <p className="ml-1 text-xs text-destructive">{fe.lga}</p>}
           </div>
           <div className="space-y-1">
             <FL>State <span className="text-destructive">*</span></FL>
-            <select value={form.state} onChange={(e) => s('state')(e.target.value)} className={cn(SELECT, fe.state ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')}>
+            <select value={form.state} onChange={(e) => s('state')(e.target.value)} className={cn(SELECT, fe.state ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')}>
               <option value="">Select state…</option>
               {NIGERIA_STATES.map((st) => <option key={st} value={st}>{st}</option>)}
             </select>
@@ -569,7 +575,7 @@ function FamilyCard({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <FL>Marital status </FL>
-            <select value={form.marital_status} onChange={(e) => s('marital_status')(e.target.value)} className={cn(SELECT, fe.marital_status ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')}>
+            <select value={form.marital_status} onChange={(e) => s('marital_status')(e.target.value)} className={cn(SELECT, fe.marital_status ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')}>
               <option value="">Select…</option>
               {MARITAL_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -577,7 +583,7 @@ function FamilyCard({
           </div>
           <div className="space-y-1">
             <FL>Religion <span className="text-destructive">*</span></FL>
-            <select value={form.religion} onChange={(e) => s('religion')(e.target.value)} className={cn(SELECT, fe.religion ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')}>
+            <select value={form.religion} onChange={(e) => s('religion')(e.target.value)} className={cn(SELECT, fe.religion ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')}>
               <option value="">Select…</option>
               {RELIGION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -599,7 +605,7 @@ function FamilyCard({
                 onChange={(e) => s(k)(e.target.value)}
                 placeholder={ph}
                 min={type === 'number' ? 0 : undefined}
-                className={cn(INPUT, fe[k as keyof FamilyFieldErrors] ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!')}
+                className={cn(INPUT, fe[k as keyof FamilyFieldErrors] ? 'border-destructive' : 'focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!')}
               />
               {fe[k as keyof FamilyFieldErrors] && <p className="ml-1 text-xs text-destructive">{fe[k as keyof FamilyFieldErrors]}</p>}
             </div>
@@ -1138,7 +1144,7 @@ function RoleCard({
                     <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                     <Input
                       placeholder="Search by name or role…"
-                      className="h-8 pl-8 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+                      className="h-8 pl-8 focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-hidden! focus:border-primary!"
                       value={managerSearch}
                       onChange={(e) => setManagerSearch(e.target.value)}
                       onKeyDown={(e) => e.stopPropagation()}
@@ -1345,6 +1351,410 @@ function ContractCard({
           <FieldItem label="Employment status" value={employee.employment_status} lastChange={historyByField.get('employment_status')} />
           <FieldItem label="Start date" value={fmtDate(employee.start_date)} lastChange={historyByField.get('start_date')} />
           <FieldItem label="End date" value={fmtDate(employee.end_date)} lastChange={historyByField.get('end_date')} />
+        </div>
+      )}
+    </CardShell>
+  )
+}
+
+// ─── CompensationCard ─────────────────────────────────────────────────────────
+
+const buildCompensationSchema = (grades: GradeRow[]) =>
+  z
+    .object({
+      pay_group: z.string().optional(),
+      level: z.string().optional(),
+      pay_grade: z.string().optional(),
+      base_salary: z.string().optional(),
+      estimated_gross_salary: z.string().optional(),
+    })
+    .superRefine((data, ctx) => {
+      const baseRaw = (data.base_salary ?? '').trim()
+      const grossRaw = (data.estimated_gross_salary ?? '').trim()
+      const gradeId = (data.pay_grade ?? '').trim()
+
+      const baseNum = baseRaw === '' ? null : Number(baseRaw)
+      const grossNum = grossRaw === '' ? null : Number(grossRaw)
+
+      if (baseNum !== null && (!Number.isFinite(baseNum) || baseNum < 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Base salary must be a non-negative number',
+          path: ['base_salary'],
+        })
+      }
+      if (grossNum !== null && (!Number.isFinite(grossNum) || grossNum < 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Estimated gross salary must be a non-negative number',
+          path: ['estimated_gross_salary'],
+        })
+      }
+
+      if (gradeId !== '') {
+        if (baseNum === null || !Number.isFinite(baseNum)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Base salary is required when a pay grade is selected',
+            path: ['base_salary'],
+          })
+        } else {
+          const grade = grades.find((g) => g.id === gradeId)
+          if (grade) {
+            const min = grade.min_salary !== null ? Number(grade.min_salary) : null
+            const max = grade.max_salary !== null ? Number(grade.max_salary) : null
+            if (min !== null && Number.isFinite(min) && baseNum < min) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Base salary must be at least ${min.toLocaleString()} for ${grade.name}`,
+                path: ['base_salary'],
+              })
+            }
+            if (max !== null && Number.isFinite(max) && baseNum > max) {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Base salary must be at most ${max.toLocaleString()} for ${grade.name}`,
+                path: ['base_salary'],
+              })
+            }
+          }
+        }
+      }
+
+      if (
+        baseNum !== null &&
+        Number.isFinite(baseNum) &&
+        grossNum !== null &&
+        Number.isFinite(grossNum) &&
+        grossNum <= baseNum
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Estimated gross salary must be greater than base salary',
+          path: ['estimated_gross_salary'],
+        })
+      }
+    })
+
+type CompensationFieldErrors = Partial<
+  Record<'pay_group' | 'level' | 'pay_grade' | 'base_salary' | 'estimated_gross_salary', string>
+>
+
+function formatGradeCurrency(n: number, currency: string | null | undefined): string {
+  const safeCurrency = (currency ?? 'NGN').toUpperCase()
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: safeCurrency,
+      maximumFractionDigits: 0,
+    }).format(n)
+  } catch {
+    return `${n.toLocaleString()} ${safeCurrency}`
+  }
+}
+
+function CompensationCard({
+  employeeId,
+  employee,
+  historyByField,
+  onSaveSuccess,
+  payGroups,
+  levels,
+  grades,
+}: {
+  employeeId: string
+  employee: Employee360Employee
+  historyByField: Map<string, ChangeEvent>
+  onSaveSuccess: () => Promise<void>
+  payGroups: PayGroupRow[]
+  levels: EmployeeLevelRow[]
+  grades: GradeRow[]
+}) {
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [form, setForm] = useState({
+    pay_group: employee.pay_group ?? '',
+    level: employee.level ?? '',
+    pay_grade: employee.pay_grade ?? '',
+    base_salary: employee.base_salary !== null ? String(employee.base_salary) : '',
+    estimated_gross_salary:
+      employee.estimated_gross_salary !== null ? String(employee.estimated_gross_salary) : '',
+  })
+  const [fieldErrors, setFieldErrors] = useState<CompensationFieldErrors>({})
+
+  const compensationSchema = useMemo(() => buildCompensationSchema(grades), [grades])
+
+  const s = (k: keyof typeof form) => (v: string) => {
+    setForm((p) => ({ ...p, [k]: v }))
+    setFieldErrors((p) => ({ ...p, [k]: undefined }))
+  }
+
+  const selectedGrade = useMemo(
+    () => grades.find((g) => g.id === form.pay_grade) ?? null,
+    [grades, form.pay_grade]
+  )
+  const selectedGradeMin =
+    selectedGrade?.min_salary !== null && selectedGrade?.min_salary !== undefined
+      ? Number(selectedGrade.min_salary)
+      : null
+  const selectedGradeMax =
+    selectedGrade?.max_salary !== null && selectedGrade?.max_salary !== undefined
+      ? Number(selectedGrade.max_salary)
+      : null
+
+  const startEdit = () => {
+    setForm({
+      pay_group: employee.pay_group ?? '',
+      level: employee.level ?? '',
+      pay_grade: employee.pay_grade ?? '',
+      base_salary: employee.base_salary !== null ? String(employee.base_salary) : '',
+      estimated_gross_salary:
+        employee.estimated_gross_salary !== null ? String(employee.estimated_gross_salary) : '',
+    })
+    setFieldErrors({})
+    setSaveError(null)
+    setEditing(true)
+  }
+
+  const handleSave = async () => {
+    const result = compensationSchema.safeParse(form)
+    if (!result.success) {
+      const errs: CompensationFieldErrors = {}
+      for (const issue of result.error.issues) {
+        const f = issue.path[0] as keyof CompensationFieldErrors
+        if (!errs[f]) errs[f] = issue.message
+      }
+      setFieldErrors(errs)
+      return
+    }
+
+    const baseRaw = (form.base_salary ?? '').trim()
+    const grossRaw = (form.estimated_gross_salary ?? '').trim()
+    const baseNum = baseRaw === '' ? null : Number(baseRaw)
+    const grossNum = grossRaw === '' ? null : Number(grossRaw)
+    const baseSalary = baseNum !== null && Number.isFinite(baseNum) ? baseNum : null
+    const estimatedGross = grossNum !== null && Number.isFinite(grossNum) ? grossNum : null
+
+    let resolvedPayGradeId: string | null = (form.pay_grade ?? '').trim() || null
+    if (!resolvedPayGradeId && baseSalary !== null) {
+      const candidates = grades
+        .filter((g) => {
+          const min = g.min_salary !== null ? Number(g.min_salary) : null
+          const max = g.max_salary !== null ? Number(g.max_salary) : null
+          const minOk = min === null || !Number.isFinite(min) || baseSalary >= min
+          const maxOk = max === null || !Number.isFinite(max) || baseSalary <= max
+          return minOk && maxOk
+        })
+        .sort((a, b) => {
+          const al = a.level ?? Number.POSITIVE_INFINITY
+          const bl = b.level ?? Number.POSITIVE_INFINITY
+          if (al !== bl) return al - bl
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        })
+      resolvedPayGradeId = candidates[0]?.id ?? null
+    }
+
+    setSaving(true)
+    setSaveError(null)
+    const r = await updateEmployeeCard(employeeId, 'compensation', {
+      pay_group: (form.pay_group ?? '').trim() || null,
+      level: (form.level ?? '').trim() || null,
+      pay_grade: resolvedPayGradeId,
+      base_salary: baseSalary,
+      estimated_gross_salary: estimatedGross,
+    })
+    if (r.success) {
+      setEditing(false)
+      toast.success('Compensation updated')
+      await onSaveSuccess()
+    } else {
+      setSaveError(r.error)
+    }
+    setSaving(false)
+  }
+
+  const fe = fieldErrors
+
+  const baseSalaryDisplay =
+    employee.base_salary !== null
+      ? formatGradeCurrency(employee.base_salary, employee.pay_grade_currency)
+      : null
+  const grossSalaryDisplay =
+    employee.estimated_gross_salary !== null
+      ? formatGradeCurrency(employee.estimated_gross_salary, employee.pay_grade_currency)
+      : null
+  const payGradeDisplay = (() => {
+    if (!employee.pay_grade_name) return null
+    const min = employee.pay_grade_min_salary
+    const max = employee.pay_grade_max_salary
+    if (min !== null && max !== null && Number.isFinite(min) && Number.isFinite(max)) {
+      return `${employee.pay_grade_name} (${formatGradeCurrency(min, employee.pay_grade_currency)} – ${formatGradeCurrency(max, employee.pay_grade_currency)})`
+    }
+    return employee.pay_grade_name
+  })()
+
+  return (
+    <CardShell
+      title="Compensation"
+      editing={editing}
+      saving={saving}
+      saveError={saveError}
+      onEdit={startEdit}
+      onCancel={() => setEditing(false)}
+      onSave={handleSave}
+    >
+      {editing ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <FL>Pay group</FL>
+            <select
+              value={form.pay_group}
+              onChange={(e) => s('pay_group')(e.target.value)}
+              className={cn(SELECT, fe.pay_group && 'border-destructive')}
+            >
+              <option value="">None</option>
+              {payGroups.map((pg) => (
+                <option key={pg.id} value={pg.id}>
+                  {pg.name ?? `Pay group ${pg.id.slice(0, 8)}`}
+                </option>
+              ))}
+            </select>
+            {fe.pay_group && <p className="ml-1 text-xs text-destructive">{fe.pay_group}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <FL>Level</FL>
+            <select
+              value={form.level}
+              onChange={(e) => s('level')(e.target.value)}
+              className={cn(SELECT, fe.level && 'border-destructive')}
+            >
+              <option value="">None</option>
+              {levels.map((lvl) => (
+                <option key={lvl.id} value={lvl.id}>
+                  {lvl.name}
+                </option>
+              ))}
+            </select>
+            {fe.level && <p className="ml-1 text-xs text-destructive">{fe.level}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <FL>Pay grade</FL>
+            <select
+              value={form.pay_grade}
+              onChange={(e) => s('pay_grade')(e.target.value)}
+              className={cn(SELECT, fe.pay_grade && 'border-destructive')}
+            >
+              <option value="">None</option>
+              {grades.map((g) => {
+                const min = g.min_salary !== null ? Number(g.min_salary) : null
+                const max = g.max_salary !== null ? Number(g.max_salary) : null
+                const range =
+                  min !== null && max !== null && Number.isFinite(min) && Number.isFinite(max)
+                    ? `${formatGradeCurrency(min, g.currency)} – ${formatGradeCurrency(max, g.currency)}`
+                    : null
+                return (
+                  <option key={g.id} value={g.id}>
+                    {range ? `${g.name} (${range})` : g.name}
+                  </option>
+                )
+              })}
+            </select>
+            {fe.pay_grade && <p className="ml-1 text-xs text-destructive">{fe.pay_grade}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <FL>
+              Base salary
+              {selectedGrade ? <span className="text-destructive"> *</span> : null}
+            </FL>
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min={
+                selectedGradeMin !== null && Number.isFinite(selectedGradeMin)
+                  ? selectedGradeMin
+                  : undefined
+              }
+              max={
+                selectedGradeMax !== null && Number.isFinite(selectedGradeMax)
+                  ? selectedGradeMax
+                  : undefined
+              }
+              value={form.base_salary}
+              onChange={(e) => s('base_salary')(e.target.value)}
+              placeholder={
+                selectedGradeMin !== null && Number.isFinite(selectedGradeMin)
+                  ? `e.g. ${selectedGradeMin.toLocaleString()}`
+                  : 'e.g. 250000'
+              }
+              className={cn(INPUT, fe.base_salary && 'border-destructive')}
+            />
+            {selectedGrade && (selectedGradeMin !== null || selectedGradeMax !== null) && (
+              <p className="ml-1 text-xs text-muted-foreground">
+                Allowed range:{' '}
+                {selectedGradeMin !== null && Number.isFinite(selectedGradeMin)
+                  ? formatGradeCurrency(selectedGradeMin, selectedGrade.currency)
+                  : '—'}
+                {' – '}
+                {selectedGradeMax !== null && Number.isFinite(selectedGradeMax)
+                  ? formatGradeCurrency(selectedGradeMax, selectedGrade.currency)
+                  : '—'}
+              </p>
+            )}
+            {fe.base_salary && <p className="ml-1 text-xs text-destructive">{fe.base_salary}</p>}
+          </div>
+
+          <div className="space-y-1 sm:col-span-2">
+            <FL>Gross salary (Estimated)</FL>
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min={0}
+              value={form.estimated_gross_salary}
+              onChange={(e) => s('estimated_gross_salary')(e.target.value)}
+              placeholder="e.g. 350000"
+              className={cn(INPUT, fe.estimated_gross_salary && 'border-destructive')}
+            />
+            <p className="ml-1 text-xs text-muted-foreground">
+              Optional. Must be greater than the base salary. Not used to compute payroll.
+            </p>
+            {fe.estimated_gross_salary && (
+              <p className="ml-1 text-xs text-destructive">{fe.estimated_gross_salary}</p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FieldItem
+            label="Pay group"
+            value={employee.pay_group_name}
+            lastChange={historyByField.get('pay_group')}
+          />
+          <FieldItem
+            label="Level"
+            value={employee.level_name}
+            lastChange={historyByField.get('level')}
+          />
+          <FieldItem
+            label="Pay grade"
+            value={payGradeDisplay}
+            lastChange={historyByField.get('pay_grade')}
+          />
+          <FieldItem
+            label="Base salary"
+            value={baseSalaryDisplay}
+            lastChange={historyByField.get('base_salary')}
+          />
+          <FieldItem
+            label="Gross salary (Estimated)"
+            value={grossSalaryDisplay}
+            lastChange={historyByField.get('estimated_gross_salary')}
+          />
         </div>
       )}
     </CardShell>
@@ -2559,6 +2969,9 @@ export function Employee360Modal({
   managerStats,
   managerHierarchy,
   locations,
+  payGroups,
+  levels,
+  grades,
 }: Employee360ModalProps) {
   const [data, setData] = useState<Employee360Response | null>(null)
   const [loading, setLoading] = useState(false)
@@ -2706,6 +3119,15 @@ export function Employee360Modal({
                     locations={locations}
                   />
                   <ContractCard employeeId={employeeId!} employee={data.employee} historyByField={historyByField} onSaveSuccess={onSaveSuccess} />
+                  <CompensationCard
+                    employeeId={employeeId!}
+                    employee={data.employee}
+                    historyByField={historyByField}
+                    onSaveSuccess={onSaveSuccess}
+                    payGroups={payGroups}
+                    levels={levels}
+                    grades={grades}
+                  />
                 </TabsContent>
                 
                 <TabsContent value="people" className="mt-0 p-4 space-y-4">

@@ -86,6 +86,11 @@ type CreateEmployeeInput = {
   job_role_id: string
   manager_id?: string | null
   report_location?: string | null
+  pay_group?: string | null
+  level?: string | null
+  pay_grade?: string | null
+  base_salary?: number | null
+  estimated_gross_salary?: number | null
 }
 
 type CreateSingleEmployeeInput = CreateEmployeeInput & {
@@ -272,6 +277,83 @@ export async function createSingleEmployee(
     if (location.organization_id !== orgId) return { success: false, error: 'Office location must belong to your organization' }
   }
 
+  // ── Compensation validation (optional fields) ───────────────────────────
+  const baseSalary =
+    input.base_salary !== undefined && input.base_salary !== null && Number.isFinite(input.base_salary)
+      ? Number(input.base_salary)
+      : null
+  const estimatedGross =
+    input.estimated_gross_salary !== undefined &&
+    input.estimated_gross_salary !== null &&
+    Number.isFinite(input.estimated_gross_salary)
+      ? Number(input.estimated_gross_salary)
+      : null
+
+  if (baseSalary !== null && baseSalary < 0) {
+    return { success: false, error: 'Base salary cannot be negative' }
+  }
+  if (estimatedGross !== null && estimatedGross < 0) {
+    return { success: false, error: 'Estimated gross salary cannot be negative' }
+  }
+  if (baseSalary !== null && estimatedGross !== null && estimatedGross <= baseSalary) {
+    return { success: false, error: 'Estimated gross salary must be greater than base salary' }
+  }
+
+  if (input.pay_group) {
+    const { data: payGroup, error: payGroupError } = await supabase
+      .from('pay_groups')
+      .select('id, organization_id')
+      .eq('id', input.pay_group)
+      .single()
+    if (payGroupError || !payGroup) return { success: false, error: 'Selected pay group was not found' }
+    if (payGroup.organization_id !== orgId) {
+      return { success: false, error: 'Pay group must belong to your organization' }
+    }
+  }
+
+  if (input.level) {
+    const { data: level, error: levelError } = await supabase
+      .from('employee_levels')
+      .select('id, organization_id')
+      .eq('id', input.level)
+      .single()
+    if (levelError || !level) return { success: false, error: 'Selected level was not found' }
+    if (level.organization_id !== orgId) {
+      return { success: false, error: 'Level must belong to your organization' }
+    }
+  }
+
+  if (input.pay_grade) {
+    const { data: grade, error: gradeError } = await supabase
+      .from('grades')
+      .select('id, organization_id, name, min_salary, max_salary, is_active')
+      .eq('id', input.pay_grade)
+      .single()
+    if (gradeError || !grade) return { success: false, error: 'Selected pay grade was not found' }
+    if (grade.organization_id !== orgId) {
+      return { success: false, error: 'Pay grade must belong to your organization' }
+    }
+    if (grade.is_active === false) {
+      return { success: false, error: 'Pay grade is inactive' }
+    }
+    if (baseSalary === null) {
+      return { success: false, error: 'Base salary is required when a pay grade is selected' }
+    }
+    const min = grade.min_salary !== null ? Number(grade.min_salary) : null
+    const max = grade.max_salary !== null ? Number(grade.max_salary) : null
+    if (min !== null && Number.isFinite(min) && baseSalary < min) {
+      return {
+        success: false,
+        error: `Base salary must be at least ${min.toLocaleString()} for ${grade.name}`,
+      }
+    }
+    if (max !== null && Number.isFinite(max) && baseSalary > max) {
+      return {
+        success: false,
+        error: `Base salary must be at most ${max.toLocaleString()} for ${grade.name}`,
+      }
+    }
+  }
 
   // ── Insert employee ──────────────────────────────────────────────────────
   const { data: employee, error: employeeError } = await supabase
@@ -289,6 +371,11 @@ export async function createSingleEmployee(
       job_role_id: input.job_role_id,
       manager_id: input.manager_id || null,
       report_location: input.report_location || null,
+      pay_group: input.pay_group || null,
+      level: input.level || null,
+      pay_grade: input.pay_grade || null,
+      base_salary: baseSalary,
+      estimated_gross_salary: estimatedGross,
     })
     .select('id')
     .single()

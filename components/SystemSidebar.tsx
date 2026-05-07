@@ -47,7 +47,7 @@ export function SystemSidebar() {
   }
 
   return (
-    <Sidebar>
+    <Sidebar className='admin-sidebar'>
       <SidebarHeader>
         <SidebarGroupLabel className="px-2 text-base font-semibold">
           System Admin
