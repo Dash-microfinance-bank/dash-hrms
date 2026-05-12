@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import {
   DEDUCTION_FORMULA_PAYE_NIGERIA,
   isPayeNigeriaDeductionFormula,
+  PAYE_NIGERIA_FORMULA_DEDUCTION_DUPLICATE_ERROR,
 } from '@/lib/deduction-formula-options'
 
 const ADMIN_ROLES = ['super_admin', 'hr', 'finance'] as const
@@ -133,6 +134,23 @@ export async function createDeduction(input: CreateDeductionInput): Promise<Dedu
   if (err) return { success: false, error: err }
 
   const { supabase, orgId } = ctx
+
+  if (input.calculation_type === 'FORMULA') {
+    const { data: existingPaye } = await supabase
+      .from('salary_components')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('type', 'DEDUCTION')
+      .eq('calculation_type', 'FORMULA')
+      .eq('formula', DEDUCTION_FORMULA_PAYE_NIGERIA)
+      .limit(1)
+      .maybeSingle()
+
+    if (existingPaye) {
+      return { success: false, error: PAYE_NIGERIA_FORMULA_DEDUCTION_DUPLICATE_ERROR }
+    }
+  }
+
   const name = input.name.trim()
   const { calculation_base: calculationBase, reduces_taxable_income: reducesTaxable } =
     persistedBaseAndReducesTax(input)
@@ -197,6 +215,23 @@ export async function updateDeduction(
   const { supabase, orgId } = ctx
   const check = await assertDeductionRow(supabase, orgId, id)
   if ('error' in check) return { success: false, error: check.error }
+
+  if (input.calculation_type === 'FORMULA') {
+    const { data: otherPaye } = await supabase
+      .from('salary_components')
+      .select('id')
+      .eq('organization_id', orgId)
+      .eq('type', 'DEDUCTION')
+      .eq('calculation_type', 'FORMULA')
+      .eq('formula', DEDUCTION_FORMULA_PAYE_NIGERIA)
+      .neq('id', id)
+      .limit(1)
+      .maybeSingle()
+
+    if (otherPaye) {
+      return { success: false, error: PAYE_NIGERIA_FORMULA_DEDUCTION_DUPLICATE_ERROR }
+    }
+  }
 
   const name = input.name.trim()
   const { calculation_base: calculationBase, reduces_taxable_income: reducesTaxable } =

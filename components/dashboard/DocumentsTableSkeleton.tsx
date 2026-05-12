@@ -1,28 +1,60 @@
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
+
+const ROW_COUNT = 8
+const COLUMNS = ['S/N', 'Name', 'Document Type', 'Category', 'Owner', 'Expiry Date', 'Action'] as const
 
 export function DocumentsTableSkeleton() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 rounded-md bg-card px-3 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Skeleton className="h-9 w-full sm:w-64" />
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-9 w-24" />
       </div>
-      <div className="rounded-md border">
-        <div className="divide-y">
-          {/* Header */}
-          <div className="flex items-center gap-4 px-4 py-3 bg-muted/50">
-            {[50, 180, 140, 130, 140, 120, 90].map((w, i) => (
-              <Skeleton key={i} className="h-4 rounded" style={{ width: w }} />
+      <div className="rounded-md">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {COLUMNS.map((col) => (
+              <TableHead key={col}>{col}</TableHead>
             ))}
-          </div>
-          {/* Rows */}
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4 px-4 py-3">
-              {[50, 180, 140, 130, 140, 120, 90].map((w, j) => (
-                <Skeleton key={j} className="h-4 rounded" style={{ width: w }} />
-              ))}
-            </div>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: ROW_COUNT }).map((_, i) => (
+            <TableRow key={i}>
+                <TableCell>
+                  <Skeleton className="h-4 w-6" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-40" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-28" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-28" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-28" />
+                </TableCell>
+                <TableCell>
+                  <Skeleton className="h-4 w-28" />
+                </TableCell>
+              <TableCell>
+                <Skeleton className="size-8 rounded" />
+              </TableCell>
+            </TableRow>
           ))}
-        </div>
+          </TableBody>
+        </Table>
       </div>
     </div>
   )

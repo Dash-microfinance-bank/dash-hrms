@@ -93,7 +93,7 @@ export function AdminSidebar() {
     <Sidebar className='admin-sidebar'>
       <SidebarHeader>
         <SidebarGroupLabel className="px-2 text-base font-semibold">
-          DASHR
+          DASH HR
         </SidebarGroupLabel>
       </SidebarHeader>
       <SidebarContent>

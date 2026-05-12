@@ -23,7 +23,7 @@ const schema = z
   .object({
     name: z.string().min(1, 'Name is required').max(120, 'Name is too long').trim(),
     calculation_type: z.enum(['FIXED', 'PERCENTAGE']),
-    based_on: z.enum(['BASIC', 'GROSS', 'NONE']),
+    based_on: z.enum(['BASIC', 'NONE']),
     taxable: z.boolean(),
   })
   .superRefine((value, ctx) => {
@@ -62,9 +62,11 @@ function EditAllowanceFormBody({
       calculation_type:
         allowance.calculation_type === 'PERCENTAGE' ? 'PERCENTAGE' : 'FIXED',
       based_on:
-        allowance.calculation_base === 'BASIC' || allowance.calculation_base === 'GROSS'
-          ? allowance.calculation_base
-          : 'NONE',
+        allowance.calculation_base === 'BASIC'
+          ? 'BASIC'
+          : allowance.calculation_base === 'GROSS'
+            ? 'BASIC'
+            : 'NONE',
       taxable: allowance.is_taxable ?? true,
     },
   })
@@ -140,7 +142,6 @@ function EditAllowanceFormBody({
             >
               <option value="NONE">Select base</option>
               <option value="BASIC">Base salary</option>
-              <option value="GROSS">Gross salary</option>
             </select>
             {errors.based_on ? (
               <p className="text-xs text-destructive">{errors.based_on.message}</p>

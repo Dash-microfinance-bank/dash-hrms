@@ -22,7 +22,7 @@ const schema = z
   .object({
     name: z.string().min(1, 'Name is required').max(120, 'Name is too long').trim(),
     calculation_type: z.enum(['FIXED', 'PERCENTAGE']),
-    based_on: z.enum(['BASIC', 'GROSS', 'NONE']),
+    based_on: z.enum(['BASIC', 'NONE']),
     taxable: z.boolean(),
   })
   .superRefine((value, ctx) => {
@@ -138,7 +138,6 @@ export function CreateAllowanceModal({
               >
                 <option value="NONE">Select base</option>
                 <option value="BASIC">Base salary</option>
-                <option value="GROSS">Gross salary</option>
               </select>
               {errors.based_on ? (
                 <p className="text-xs text-destructive">{errors.based_on.message}</p>

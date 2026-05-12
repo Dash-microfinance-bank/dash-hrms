@@ -21,7 +21,12 @@ const COLUMNS = [
 
 export function EarningStructureSummaryTableSkeleton() {
   return (
-    <div className="rounded-md border overflow-x-auto">
+    <div className="space-y-4 rounded-md bg-card px-3 py-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Skeleton className="h-9 w-full sm:w-72" />
+        <Skeleton className="h-9 w-20" />
+      </div>
+    <div className="rounded-md">
       <Table>
         <TableHeader>
           <TableRow>
@@ -42,6 +47,7 @@ export function EarningStructureSummaryTableSkeleton() {
           ))}
         </TableBody>
       </Table>
+    </div>
     </div>
   )
 }

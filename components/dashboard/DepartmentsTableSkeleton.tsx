@@ -13,7 +13,12 @@ const COLUMNS = ['S/N', 'Name', 'Parent department', 'Created', 'Actions'] as co
 
 export function DepartmentsTableSkeleton() {
   return (
-    <div className="rounded-md border">
+    <div className="space-y-4 rounded-md bg-card px-3 py-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-9 w-24" />
+      </div>
+      <div className="rounded-md">
       <Table>
         <TableHeader>
           <TableRow>
@@ -42,8 +47,9 @@ export function DepartmentsTableSkeleton() {
               </TableCell>
             </TableRow>
           ))}
-        </TableBody>
-      </Table>
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }

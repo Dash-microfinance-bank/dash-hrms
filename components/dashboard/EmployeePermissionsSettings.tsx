@@ -232,22 +232,22 @@ export function EmployeePermissionsSettings({
   })
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-10 bg-card py-3 px-3 rounded-md">
       {groupNames.map((groupName) => {
         const fields = schema[groupName]
         return (
           <div key={groupName} className="space-y-3">
             <h3 className="text-lg font-semibold ml-2">{groupName}</h3>
             <div className="space-y-4 py-5 pl-4 border pr-4 border-border rounded-sm">
-              {fields.map((field) => {
+              {fields.map((field, index) => {
                 const readKey = `${field.field_key}-can_read`
                 const writeKey = `${field.field_key}-can_write`
                 const isUpdatingRead = updating.has(readKey)
                 const isUpdatingWrite = updating.has(writeKey)
 
                 return (
+                  <div key={field.field_key}>
                   <div
-                    key={field.field_key}
                     className="flex items-center justify-between gap-4 py-2"
                   >
                     <div className="flex-1 min-w-0">
@@ -290,6 +290,8 @@ export function EmployeePermissionsSettings({
                         />
                       </div>
                     </div>
+                  </div>
+                  {index < fields.length - 1 ? <hr className="border-border" /> : null}
                   </div>
                 )
               })}

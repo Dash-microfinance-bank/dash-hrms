@@ -219,7 +219,7 @@ export function DeductionsTable({ data }: DeductionsTableProps) {
   const handleSuccess = () => router.refresh()
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 bg-card py-3 px-3 rounded-md">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:w-72">
           <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
@@ -233,7 +233,7 @@ export function DeductionsTable({ data }: DeductionsTableProps) {
         <Button onClick={() => setCreateOpen(true)}>Create</Button>
       </div>
 
-      <div className="rounded-md border overflow-x-auto">
+      <div className="rounded-md overflow-x-auto">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -270,7 +270,12 @@ export function DeductionsTable({ data }: DeductionsTableProps) {
         </Table>
       </div>
 
-      <CreateDeductionModal open={createOpen} onOpenChange={setCreateOpen} onSuccess={handleSuccess} />
+      <CreateDeductionModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSuccess={handleSuccess}
+        existingDeductions={data}
+      />
       {editing ? (
         <EditDeductionModal
           deduction={editing}
@@ -279,6 +284,7 @@ export function DeductionsTable({ data }: DeductionsTableProps) {
             if (!open) setEditing(null)
           }}
           onSuccess={handleSuccess}
+          existingDeductions={data}
         />
       ) : null}
       <DeleteDeductionConfirmModal

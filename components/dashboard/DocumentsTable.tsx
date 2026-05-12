@@ -350,7 +350,7 @@ export function DocumentsTable({ data }: DocumentsTableProps) {
   const pageEnd = Math.min(pageStart + rows.length - 1, filtered)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 bg-card py-3 px-3 rounded-md">
       {/* Search */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:w-72">
@@ -365,7 +365,7 @@ export function DocumentsTable({ data }: DocumentsTableProps) {
       </div>
 
       {/* Table */}
-      <div className="rounded-md border overflow-x-auto">
+      <div className="rounded-md overflow-x-auto">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

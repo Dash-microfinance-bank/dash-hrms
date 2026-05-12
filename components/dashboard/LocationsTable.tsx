@@ -175,7 +175,7 @@ export function LocationsTable({ data }: LocationsTableProps) {
   const isEmpty = data.length === 0
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 bg-card py-3 px-3 rounded-md">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <div className="relative w-full sm:w-64">
@@ -191,7 +191,7 @@ export function LocationsTable({ data }: LocationsTableProps) {
         <Button onClick={() => setCreateOpen(true)}>Add location</Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

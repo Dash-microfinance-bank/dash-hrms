@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useMemo } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -17,22 +17,27 @@ import { updateDeduction } from '@/lib/actions/deductions'
 import {
   DEDUCTION_FORMULA_PAYE_NIGERIA,
   isPayeNigeriaDeductionFormula,
+  isPayeNigeriaFormulaDeductionRow,
+  PAYE_NIGERIA_FORMULA_DEDUCTION_DUPLICATE_ERROR,
 } from '@/lib/deduction-formula-options'
 import { toast } from 'sonner'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 
-const schema = z
-  .object({
-    name: z.string().min(1, 'Name is required').max(120, 'Name is too long').trim(),
-    calculation_type: z.enum(['FIXED', 'PERCENTAGE', 'FORMULA']),
-    based_on: z.enum(['BASIC', 'GROSS', 'NONE']),
-    reduces_taxable: z.boolean(),
-    value: z.string().optional(),
-    formula: z.string().optional(),
-  })
-  .superRefine((value, ctx) => {
+const editDeductionFormValuesSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(120, 'Name is too long').trim(),
+  calculation_type: z.enum(['FIXED', 'PERCENTAGE', 'FORMULA']),
+  based_on: z.enum(['BASIC', 'GROSS', 'NONE']),
+  reduces_taxable: z.boolean(),
+  value: z.string().optional(),
+  formula: z.string().optional(),
+})
+
+type FormValues = z.infer<typeof editDeductionFormValuesSchema>
+
+function editDeductionFormSchema(opts: { otherRowHasPayeNigeria: boolean }) {
+  return editDeductionFormValuesSchema.superRefine((value, ctx) => {
     if (value.calculation_type === 'PERCENTAGE' && value.based_on === 'NONE') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -41,6 +46,17 @@ const schema = z
       })
     }
     if (value.calculation_type === 'FORMULA') {
+      if (
+        opts.otherRowHasPayeNigeria &&
+        isPayeNigeriaDeductionFormula(value.formula)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: PAYE_NIGERIA_FORMULA_DEDUCTION_DUPLICATE_ERROR,
+          path: ['calculation_type'],
+        })
+        return
+      }
       if (!isPayeNigeriaDeductionFormula(value.formula)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -59,14 +75,14 @@ const schema = z
       }
     }
   })
-
-type FormValues = z.infer<typeof schema>
+}
 
 type EditDeductionModalProps = {
   deduction: DeductionTableRow
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: () => void
+  existingDeductions: DeductionTableRow[]
 }
 
 function defaultFormula(d: DeductionTableRow): string {
@@ -80,9 +96,23 @@ function defaultValueString(d: DeductionTableRow): string {
 
 function EditDeductionFormBody({
   deduction,
+  existingDeductions,
   onOpenChange,
   onSuccess,
 }: Omit<EditDeductionModalProps, 'open'>) {
+  const otherRowHasPayeNigeria = useMemo(
+    () =>
+      existingDeductions.some(
+        (r) => r.id !== deduction.id && isPayeNigeriaFormulaDeductionRow(r)
+      ),
+    [existingDeductions, deduction.id]
+  )
+
+  const resolver = useMemo(
+    () => zodResolver(editDeductionFormSchema({ otherRowHasPayeNigeria })),
+    [otherRowHasPayeNigeria]
+  )
+
   const ct = deduction.calculation_type ?? 'FIXED'
   const {
     register,
@@ -90,7 +120,7 @@ function EditDeductionFormBody({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver,
     defaultValues: {
       name: deduction.name ?? '',
       calculation_type: ct === 'PERCENTAGE' || ct === 'FORMULA' ? ct : 'FIXED',
@@ -110,6 +140,15 @@ function EditDeductionFormBody({
   const calculationType = watch('calculation_type')
 
   const onSubmit = async (values: FormValues) => {
+    if (
+      values.calculation_type === 'FORMULA' &&
+      otherRowHasPayeNigeria &&
+      isPayeNigeriaDeductionFormula(values.formula)
+    ) {
+      toast.error(PAYE_NIGERIA_FORMULA_DEDUCTION_DUPLICATE_ERROR)
+      return
+    }
+
     const calculationBase =
       values.calculation_type === 'FORMULA'
         ? 'TAXABLE'
@@ -172,12 +211,22 @@ function EditDeductionFormBody({
           <select
             id="edit-deduction-calculation-type"
             {...register('calculation_type')}
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!"
+            className={
+              errors.calculation_type
+                ? 'flex h-9 w-full rounded-md border border-destructive bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
+                : 'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-0! focus-visible:ring-offset-0! focus-visible:border-primary! outline-none! focus:border-primary!'
+            }
           >
             <option value="FIXED">Fixed</option>
             <option value="PERCENTAGE">Percentage</option>
-            <option value="FORMULA">Formula</option>
+            <option value="FORMULA" disabled={otherRowHasPayeNigeria}>
+              Formula
+              {otherRowHasPayeNigeria ? ' (PAYE already configured)' : ''}
+            </option>
           </select>
+          {errors.calculation_type ? (
+            <p className="text-xs text-destructive">{errors.calculation_type.message}</p>
+          ) : null}
         </div>
 
         {calculationType === 'PERCENTAGE' ? (
@@ -270,6 +319,7 @@ export function EditDeductionModal({
   open,
   onOpenChange,
   onSuccess,
+  existingDeductions,
 }: EditDeductionModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -278,6 +328,7 @@ export function EditDeductionModal({
           <EditDeductionFormBody
             key={deduction.id}
             deduction={deduction}
+            existingDeductions={existingDeductions}
             onOpenChange={onOpenChange}
             onSuccess={onSuccess}
           />

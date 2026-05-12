@@ -204,7 +204,7 @@ export function DocumentTypesTable({ data, categories }: DocumentTypesTableProps
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 bg-card py-3 px-3 rounded-md">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:w-64">
           <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
@@ -218,7 +218,7 @@ export function DocumentTypesTable({ data, categories }: DocumentTypesTableProps
         <Button onClick={() => setCreateOpen(true)}>Create</Button>
       </div>
 
-      <div className="rounded-md border overflow-x-auto">
+      <div className="rounded-md overflow-x-auto">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
