@@ -13,6 +13,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import {
   AlertDialog,
@@ -70,7 +71,7 @@ const documentsNavItems = [
 ] as const
 
 const payrollNavItems = [
-  { label: 'Payroll Run', href: '/dashboard/admin/payroll-run', icon: Wallet },
+  { label: 'Payroll Run', href: '/dashboard/admin/payroll', icon: Wallet },
   { label: 'Allowances', href: '/dashboard/admin/payroll/allowances', icon: HandCoins },
   { label: 'Earning structures', href: '/dashboard/admin/payroll/earning-structure', icon: TrendingUp },
   { label: 'Deductions', href: '/dashboard/admin/payroll/deductions', icon: BadgeDollarSign },
@@ -82,6 +83,11 @@ export function AdminSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const { isMobile, setOpenMobile } = useSidebar()
+
+  function handleNavLinkClick() {
+    if (isMobile) setOpenMobile(false)
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -112,7 +118,7 @@ export function AdminSidebar() {
                       isActive={isActive} 
                       tooltip={item.label}
                     >
-                      <Link href={item.href}>
+                      <Link href={item.href} onClick={handleNavLinkClick}>
                         <Icon />
                         <span>{item.label}</span>
                       </Link>
@@ -138,7 +144,7 @@ export function AdminSidebar() {
                       isActive={isActive}
                       tooltip={item.label}
                     >
-                      <Link href={item.href}>
+                      <Link href={item.href} onClick={handleNavLinkClick}>
                         <Icon />
                         <span>{item.label}</span>
                       </Link>
@@ -164,7 +170,7 @@ export function AdminSidebar() {
                       isActive={isActive}
                       tooltip={item.label}
                     >
-                      <Link href={item.href}>
+                      <Link href={item.href} onClick={handleNavLinkClick}>
                         <Icon />
                         <span>{item.label}</span>
                       </Link>
@@ -190,7 +196,7 @@ export function AdminSidebar() {
                       isActive={isActive}
                       tooltip={item.label}
                     >
-                      <Link href={item.href}>
+                      <Link href={item.href} onClick={handleNavLinkClick}>
                         <Icon />
                         <span>{item.label}</span>
                       </Link>

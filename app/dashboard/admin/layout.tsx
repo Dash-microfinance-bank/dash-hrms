@@ -54,8 +54,8 @@ export default async function AdminDashboardLayout({
   return (
     <SidebarProvider>
       <AdminSidebar />
-      <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 sticky top-0 z-10 bg-background">
+      <SidebarInset className="min-w-0">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4 sticky top-0 z-0 bg-background">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1" />
             <span className="text-sm font-medium text-muted-foreground">
