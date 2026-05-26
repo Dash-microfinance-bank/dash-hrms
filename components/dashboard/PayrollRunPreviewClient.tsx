@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PayrollRunPreviewTable } from '@/components/dashboard/PayrollRunPreviewTable'
 import type { PayrollRunPreviewCompensationRow } from '@/lib/data/payroll-run-preview'
 import type { PayrollRunStatus } from '@/lib/data/payroll-runs'
+import type { PayrollApprovalState } from '@/lib/data/payroll-approvals'
 import type { ConfiguredDeductionLine } from '@/lib/payroll/tax-calculator'
 import {
   buildBreakdownMapFromRows,
@@ -19,6 +20,7 @@ type Props = {
   configuredDeductions: ConfiguredDeductionLine[]
   payrollRunStatus: PayrollRunStatus | null
   employeeCount: number
+  approval: PayrollApprovalState
 }
 
 function formatCurrency(amount: number): string {
@@ -52,6 +54,7 @@ export function PayrollRunPreviewClient({
   configuredDeductions,
   payrollRunStatus,
   employeeCount,
+  approval,
 }: Props) {
   const [totals, setTotals] = useState<PayrollPreviewTotals>(() =>
     computePayrollPreviewTotals(rows, buildBreakdownMapFromRows(rows), configuredDeductions)
@@ -84,6 +87,7 @@ export function PayrollRunPreviewClient({
           runHasPersistedEntries={runHasPersistedEntries}
           configuredDeductions={configuredDeductions}
           payrollRunStatus={payrollRunStatus}
+          approval={approval}
           onTotalsChange={handleTotalsChange}
         />
       </div>

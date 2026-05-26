@@ -34,6 +34,7 @@ export async function PayrollRunPreviewWithData({ id }: Props) {
     runHasPersistedEntries,
     configuredDeductions,
     payrollRunStatus,
+    approval,
   } = await getPayrollRunPreviewData(id)
 
   if (!run) notFound()
@@ -77,6 +78,7 @@ export async function PayrollRunPreviewWithData({ id }: Props) {
         configuredDeductions={configuredDeductions}
         payrollRunStatus={payrollRunStatus}
         employeeCount={previewCount}
+        approval={approval}
       />
     </>
   )

@@ -55,6 +55,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { savePayrollEntryPreview, savePayrollRunDraft } from '@/lib/actions/payroll-entries'
+import {
+  reviewPayrollApprovalStep,
+  submitPayrollRunForApproval,
+} from '@/lib/actions/payroll-approvals'
+import type { PayrollApprovalState } from '@/lib/data/payroll-approvals'
 import type {
   PayrollRunPreviewCompensationRow,
   PayrollRunEmployeePreviewRow,
@@ -93,6 +98,7 @@ type Props = {
   runHasPersistedEntries: boolean
   configuredDeductions?: ConfiguredDeductionLine[]
   payrollRunStatus: PayrollRunStatus | null
+  approval: PayrollApprovalState
   onTotalsChange?: (totals: PayrollPreviewTotals) => void
 }
 
@@ -241,11 +247,14 @@ export function PayrollRunPreviewTable({
   runHasPersistedEntries,
   configuredDeductions = [],
   payrollRunStatus,
+  approval,
   onTotalsChange,
 }: Props) {
   'use no memo'
   const router = useRouter()
   const [isSaving, setIsSaving] = useState(false)
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false)
+  const [isReviewing, setIsReviewing] = useState(false)
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [breakdownByEmployeeId, setBreakdownByEmployeeId] = useState<Record<string, AllowanceBreakdownItem[]>>(
@@ -273,6 +282,46 @@ export function PayrollRunPreviewTable({
   useEffect(() => {
     onTotalsChange?.(computePayrollPreviewTotals(rows, breakdownByEmployeeId, configuredDeductions))
   }, [breakdownByEmployeeId, rows, configuredDeductions, onTotalsChange])
+
+  const showSaveDraft = !runHasPersistedEntries
+  const showSubmitForApproval = approval.canSubmit
+  const showApproveReject = approval.canReviewCurrentStep && approval.currentStepId
+  const showLock = payrollRunStatus === 'APPROVED'
+
+  const handleSubmitForApproval = async () => {
+    setIsSubmittingApproval(true)
+    try {
+      const result = await submitPayrollRunForApproval(payrollRunId)
+      if (!result.success) {
+        toast.error(result.error)
+        return
+      }
+      toast.success('Submitted for approval')
+      router.refresh()
+    } finally {
+      setIsSubmittingApproval(false)
+    }
+  }
+
+  const handleReview = async (decision: 'approve' | 'reject') => {
+    if (!approval.currentStepId) return
+    setIsReviewing(true)
+    try {
+      const result = await reviewPayrollApprovalStep(
+        payrollRunId,
+        approval.currentStepId,
+        decision
+      )
+      if (!result.success) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(decision === 'approve' ? 'Step approved' : 'Step rejected')
+      router.refresh()
+    } finally {
+      setIsReviewing(false)
+    }
+  }
 
   const handleSaveDraft = async () => {
     setIsSaving(true)
@@ -619,20 +668,66 @@ export function PayrollRunPreviewTable({
             onChange={(e) => table.setGlobalFilter(e.target.value)}
           />
         </div>
-        <div>
-          <Button
-            variant="default"
-            size="sm"
-            className="cursor-pointer mr-2"
-            disabled={isSaving || runHasPersistedEntries}
-            onClick={handleSaveDraft}
-          >
-            <SaveIcon className="size-4" />
-            {isSaving ? 'Saving…' : 'Save Draft'}
-          </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {showSaveDraft && (
+            <Button
+              variant="default"
+              size="sm"
+              className="cursor-pointer"
+              disabled={isSaving}
+              onClick={handleSaveDraft}
+            >
+              <SaveIcon className="size-4" />
+              {isSaving ? 'Saving…' : 'Save Draft'}
+            </Button>
+          )}
+          {showSubmitForApproval && (
+            <Button
+              variant="default"
+              size="sm"
+              className="cursor-pointer"
+              disabled={isSubmittingApproval}
+              onClick={handleSubmitForApproval}
+            >
+              {isSubmittingApproval ? 'Submitting…' : 'Submit for approval'}
+            </Button>
+          )}
+          {showApproveReject && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="cursor-pointer"
+                disabled={isReviewing}
+                onClick={() => handleReview('reject')}
+              >
+                {isReviewing ? 'Working…' : 'Reject'}
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                className="cursor-pointer"
+                disabled={isReviewing}
+                onClick={() => handleReview('approve')}
+              >
+                {isReviewing ? 'Working…' : 'Approve'}
+              </Button>
+            </>
+          )}
+          {showLock && (
+            <Button
+              variant="default"
+              size="sm"
+              className="cursor-pointer"
+              disabled
+              title="Lock functionality coming soon"
+            >
+              Lock
+            </Button>
+          )}
           {payrollRunStatus === 'LOCKED' && (
             <>
-              <Button variant="default" size="sm" className="cursor-pointer mr-2">
+              <Button variant="default" size="sm" className="cursor-pointer">
                 <MailIcon className="size-4 mr-0" />
                 Send Payslips
               </Button>

@@ -43,6 +43,7 @@ import {
   UserPlus,
   Users,
   Wallet,
+  CheckCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -52,7 +53,8 @@ const organizationalStructureNavItems = [
   { label: 'Departments', href: '/dashboard/admin/departments', icon: Building2 },
   { label: 'Job roles', href: '/dashboard/admin/job-roles', icon: Briefcase },
   { label: 'Grades', href: '/dashboard/admin/grades', icon: TrendingUp },
-  { label: 'Levels', href: '/dashboard/admin/levels', icon: LayersIcon }
+  { label: 'Levels', href: '/dashboard/admin/levels', icon: LayersIcon },
+  { label: 'Approval workflow', href: '/dashboard/admin/approval-workflow', icon: CheckCircle }
 ] as const
 
 const hrisNavItems = [
@@ -76,7 +78,6 @@ const payrollNavItems = [
   { label: 'Earning structures', href: '/dashboard/admin/payroll/earning-structure', icon: TrendingUp },
   { label: 'Deductions', href: '/dashboard/admin/payroll/deductions', icon: BadgeDollarSign },
   { label: 'Pay groups', href: '/dashboard/admin/payroll/pay-groups', icon: Users },
-  { label: 'Approval workflow', href: '/dashboard/admin/payroll/approval-workflow', icon: FileText },
 ] as const
 
 export function AdminSidebar() {

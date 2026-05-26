@@ -17,6 +17,7 @@ import {
 } from '@/lib/payroll/tax-calculator'
 import type { PayDayType, PayFrequency } from '@/lib/data/pay-groups'
 import type { PayrollRunStatus, PayrollRunType } from '@/lib/data/payroll-runs'
+import { getPayrollApprovalState, type PayrollApprovalState } from '@/lib/data/payroll-approvals'
 import { formatPayDateLabel, formatPayPeriodLabel } from '@/lib/payroll/pay-run-labels'
 
 /** Legacy display row (tax/net still optional). */
@@ -68,6 +69,7 @@ export type PayrollRunPreviewData = {
   /** Org deduction components to pass to the client for live recomputation. */
   configuredDeductions: ConfiguredDeductionLine[]
   payrollRunStatus: PayrollRunStatus | null
+  approval: PayrollApprovalState
 }
 
 type RawPayrollRunWithGroup = {
@@ -97,6 +99,16 @@ function emptyPreviewData(): PayrollRunPreviewData {
     runHasPersistedEntries: false,
     configuredDeductions: [],
     payrollRunStatus: null,
+    approval: {
+      requestId: null,
+      requestStatus: null,
+      hasOpenRequest: false,
+      canSubmit: false,
+      canReviewCurrentStep: false,
+      currentStepId: null,
+      currentStepOrder: null,
+      steps: [],
+    },
   }
 }
 
@@ -306,12 +318,17 @@ export async function getPayrollRunPreviewData(
     if (empError) {
       console.error('[PayrollRunPreview] Failed to load employees:', empError)
     }
+    const approval = await getPayrollApprovalState(payrollRunId, {
+      runHasPersistedEntries: false,
+      payrollRunStatus,
+    })
     return {
       rows: [],
       run: runMeta,
       runHasPersistedEntries: false,
       configuredDeductions: [],
       payrollRunStatus,
+      approval,
     }
   }
 
@@ -595,11 +612,17 @@ export async function getPayrollRunPreviewData(
     }
   })
 
+  const approval = await getPayrollApprovalState(payrollRunId, {
+    runHasPersistedEntries,
+    payrollRunStatus,
+  })
+
   return {
     rows,
     run: runMeta,
     runHasPersistedEntries,
     configuredDeductions,
     payrollRunStatus,
+    approval,
   }
 }
