@@ -20,7 +20,6 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  DownloadIcon,
   MailIcon,
   MoreHorizontalIcon,
   SaveIcon,
@@ -39,6 +38,16 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -55,6 +64,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { savePayrollEntryPreview, savePayrollRunDraft } from '@/lib/actions/payroll-entries'
+import { lockPayrollRun } from '@/lib/actions/payroll-lock'
 import {
   reviewPayrollApprovalStep,
   submitPayrollRunForApproval,
@@ -255,6 +265,8 @@ export function PayrollRunPreviewTable({
   const [isSaving, setIsSaving] = useState(false)
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false)
   const [isReviewing, setIsReviewing] = useState(false)
+  const [isLocking, setIsLocking] = useState(false)
+  const [lockConfirmOpen, setLockConfirmOpen] = useState(false)
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [breakdownByEmployeeId, setBreakdownByEmployeeId] = useState<Record<string, AllowanceBreakdownItem[]>>(
@@ -300,6 +312,36 @@ export function PayrollRunPreviewTable({
       router.refresh()
     } finally {
       setIsSubmittingApproval(false)
+    }
+  }
+
+  const handleLock = async (): Promise<boolean> => {
+    setIsLocking(true)
+    try {
+      const result = await lockPayrollRun(payrollRunId)
+      if (!result.success) {
+        toast.error(result.error)
+        return false
+      }
+      const { generated, failed, total } = result
+      if (failed > 0) {
+        toast.warning(
+          `Payroll locked. ${generated} of ${total} payslips generated; ${failed} failed.`
+        )
+      } else {
+        toast.success(`Payroll locked. ${generated} payslip${generated === 1 ? '' : 's'} generated.`)
+      }
+      router.refresh()
+      return true
+    } finally {
+      setIsLocking(false)
+    }
+  }
+
+  const handleConfirmLock = async () => {
+    const success = await handleLock()
+    if (success) {
+      setLockConfirmOpen(false)
     }
   }
 
@@ -658,6 +700,36 @@ export function PayrollRunPreviewTable({
         </DialogContent>
       </Dialog>
 
+      <AlertDialog
+        open={lockConfirmOpen}
+        onOpenChange={(open) => {
+          if (!isLocking) setLockConfirmOpen(open)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Lock payroll run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will finalize the payroll run for {rows.length} employee
+              {rows.length === 1 ? '' : 's'}, generate a payslip PDF for each, and upload them
+              to storage. The run cannot be edited after locking.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isLocking}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isLocking}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleConfirmLock()
+              }}
+            >
+              {isLocking ? 'Locking…' : 'Lock payroll'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center justify-between">
         <div className="relative w-full sm:w-80">
           <SearchIcon className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
@@ -719,10 +791,10 @@ export function PayrollRunPreviewTable({
               variant="default"
               size="sm"
               className="cursor-pointer"
-              disabled
-              title="Lock functionality coming soon"
+              disabled={isLocking}
+              onClick={() => setLockConfirmOpen(true)}
             >
-              Lock
+              Lock Payroll
             </Button>
           )}
           {payrollRunStatus === 'LOCKED' && (
@@ -731,14 +803,14 @@ export function PayrollRunPreviewTable({
                 <MailIcon className="size-4 mr-0" />
                 Send Payslips
               </Button>
-              <Button
+              {/* <Button
                 variant="ghost"
                 size="sm"
                 className="cursor-pointer bg-green-700 text-white hover:bg-green-800 hover:text-white"
               >
                 <DownloadIcon className="size-4 mr-0" />
                 Download Payslips
-              </Button>
+              </Button> */}
             </>
           )}
         </div>
